@@ -197,10 +197,6 @@ export default function SimpleEditor() {
   }
   return (
     <div className={`container mx-auto p-4 space-y-4 ${isDarkMode ? 'dark' : ''}`}>
-<h1 className="text-3xl 
-        font-extrabold 
-        text-center bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent p-4"
-        >Simplest Online Editor</h1>
 
       <div className="flex justify-between items-center">
         <Select onValueChange={(value) => setMode(value)}>
@@ -243,7 +239,7 @@ export default function SimpleEditor() {
           useWorker: false,
           showPrintMargin: false,
         }}
-        style={{ width: '100%', height: '400px' }}
+        style={{ width: '100%', height: '60vh' }}
       />
     </div>
   )

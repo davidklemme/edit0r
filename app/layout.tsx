@@ -31,7 +31,16 @@ export default function RootLayout({
         className='font-sans antialiased'
       >
         {children}
+        <footer className="footer p-4
+    bg-transparent text-secondary text-xs
+    flex items-center justify-between">
+	<div className="w-full flex flex-col md:flex-row text-gray-400 items-center justify-center">
+		2025 | <b><a href="https://www.berlinersoftwareschmiede.de">Berliner Softwareschmiede</a> UG</b> (haftungsb.), In der Gasse 6, 14550 Gross Kreutz, HRB 37643, UstID DE331327207
+	</div>
+	
+</footer>
       </body>
+      
     </html>
   );
 }
