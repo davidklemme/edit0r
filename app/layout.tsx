@@ -5,11 +5,11 @@ import { Inter } from 'next/font/google'
 
 import "./globals.css";
 
-const inter = Inter({ 
-  subsets: ['latin'],
-  weight: ['400', '600', '700', '800'],
-  variable: '--font-inter',
-})
+// const inter = Inter({ 
+//   subsets: ['latin'],
+//   weight: ['400', '600', '700', '800'],
+//   variable: '--font-inter',
+// })
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
