@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 
 
 import "./globals.css";
+import PlausibleProvider from "next-plausible";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -29,16 +30,17 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body
         className='font-sans antialiased'
-      >
+      ><PlausibleProvider domain="edit0r.vercel.app">
         {children}
         <footer className="footer p-4
     bg-transparent text-secondary text-xs
     flex items-center justify-between">
-	<div className="w-full flex flex-col md:flex-row text-gray-400 items-center justify-center">
+	    <div className="w-full flex flex-col md:flex-row text-gray-400 items-center justify-center">
 		2025 | <b><a href="https://www.berlinersoftwareschmiede.de">Berliner Softwareschmiede</a> UG</b> (haftungsb.), In der Gasse 6, 14550 Gross Kreutz, HRB 37643, UstID DE331327207
-	</div>
+	  </div>
 	
 </footer>
+</PlausibleProvider>
       </body>
       
     </html>
