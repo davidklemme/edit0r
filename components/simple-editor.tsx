@@ -5,7 +5,7 @@ import AceEditor from 'react-ace'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
-import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2 } from 'lucide-react'
+import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Check } from 'lucide-react'
 
 import 'ace-builds/src-noconflict/mode-json'
 import 'ace-builds/src-noconflict/mode-html'
@@ -138,6 +138,35 @@ export default function SimpleEditor() {
     })
   }
 
+  const validateContent = () => {
+    try {
+      if (mode === 'json') {
+        JSON.parse(content)
+      } else if (mode === 'html') {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(content, 'text/html')
+        if (doc.querySelector('parsererror')) {
+          throw new Error(doc.querySelector('parsererror')?.textContent || 'Invalid HTML')
+        }
+      } else if (mode === 'csv') {
+        const result = Papa.parse(content, { header: true })
+        if (result.errors.length) {
+          throw new Error(result.errors.map(e => e.message).join(', '))
+        }
+      }
+      toast({
+        title: 'Validation successful',
+        description: `The ${mode.toUpperCase()} content is valid.`,
+      })
+    } catch (error: unknown) {
+      toast({
+        title: 'Validation failed',
+        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      })
+    }
+  }
+
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
   }
@@ -219,6 +248,9 @@ export default function SimpleEditor() {
           </Button>
           <Button onClick={formatContent} title="Format Content">
             <FileCode2 className="h-4 w-4" />
+          </Button>
+          <Button onClick={validateContent} title="Validate Content">
+            <Check className="h-4 w-4" />
           </Button>
           <Button onClick={isFlattened ? unflattenContent : flattenContent} title={isFlattened ? "Unflatten Content" : "Flatten Content"}>
             {isFlattened ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
