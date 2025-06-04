@@ -5,7 +5,7 @@ import AceEditor from 'react-ace'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
-import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2 } from 'lucide-react'
+import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen } from 'lucide-react'
 
 import 'ace-builds/src-noconflict/mode-json'
 import 'ace-builds/src-noconflict/mode-html'
@@ -20,6 +20,7 @@ export default function SimpleEditor() {
   const [mode, setMode] = useState('text')
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [isFlattened, setIsFlattened] = useState(false)
+  const [savedKeys, setSavedKeys] = useState<string[]>([])
 
   useEffect(() => {
     // Apply custom styles to AceEditor and global scrollbars
@@ -74,6 +75,10 @@ export default function SimpleEditor() {
       document.head.removeChild(style)
     }
   }, [isDarkMode])
+
+  useEffect(() => {
+    loadSavedKeys()
+  }, [])
 
   const formatContent = () => {
     try {
@@ -136,6 +141,47 @@ export default function SimpleEditor() {
         description: 'Content has been pasted from your clipboard.',
       })
     })
+  }
+
+  const saveContent = () => {
+    const name = prompt('Enter a name for this content:')
+    if (!name) {
+      return
+    }
+    try {
+      localStorage.setItem(name, content)
+      loadSavedKeys()
+      toast({
+        title: 'Content saved',
+        description: `Saved as "${name}"`,
+      })
+    } catch (error: unknown) {
+      toast({
+        title: 'Save failed',
+        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const loadSavedKeys = () => {
+    const keys: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key) keys.push(key)
+    }
+    setSavedKeys(keys)
+  }
+
+  const loadContent = (key: string) => {
+    const value = localStorage.getItem(key)
+    if (value !== null) {
+      setContent(value)
+      toast({
+        title: 'Content loaded',
+        description: `Loaded "${key}"`,
+      })
+    }
   }
 
   const toggleDarkMode = () => {
@@ -223,6 +269,22 @@ export default function SimpleEditor() {
           <Button onClick={isFlattened ? unflattenContent : flattenContent} title={isFlattened ? "Unflatten Content" : "Flatten Content"}>
             {isFlattened ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
           </Button>
+          <Button onClick={saveContent} title="Save Content">
+            <Save className="h-4 w-4" />
+          </Button>
+          <Select onValueChange={loadContent} onOpenChange={(open) => open && loadSavedKeys()}>
+            <SelectTrigger className="w-9 px-0">
+              <FolderOpen className="h-4 w-4" />
+            </SelectTrigger>
+            <SelectContent>
+              {savedKeys.length === 0 && (
+                <SelectItem value="" disabled>No entries</SelectItem>
+              )}
+              {savedKeys.map((key) => (
+                <SelectItem key={key} value={key}>{key}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button onClick={toggleDarkMode} title="Toggle Dark Mode">
             {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
