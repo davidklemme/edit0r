@@ -5,8 +5,7 @@ import AceEditor from 'react-ace'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
-
-import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, C
+import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen, Check } from 'lucide-react'
 
 import 'ace-builds/src-noconflict/mode-json'
 import 'ace-builds/src-noconflict/mode-html'
@@ -144,21 +143,6 @@ export default function SimpleEditor() {
     })
   }
 
-  const saveContent = () => {
-    const name = prompt('Enter a name for this content:')
-    if (!name) {
-      return
-    }
-    try {
-      localStorage.setItem(name, content)
-      loadSavedKeys()
-      toast({
-        title: 'Content saved',
-        description: `Saved as "${name}"`,
-      })
-    } catch (error: unknown) {
-      toast({
-        title: 'Save failed',
   const validateContent = () => {
     try {
       if (mode === 'json') {
@@ -182,6 +166,27 @@ export default function SimpleEditor() {
     } catch (error: unknown) {
       toast({
         title: 'Validation failed',
+        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const saveContent = () => {
+    const name = prompt('Enter a name for this content:')
+    if (!name) {
+      return
+    }
+    try {
+      localStorage.setItem(name, content)
+      loadSavedKeys()
+      toast({
+        title: 'Content saved',
+        description: `Saved as "${name}"`,
+      })
+    } catch (error: unknown) {
+      toast({
+        title: 'Save failed',
         description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive',
       })
