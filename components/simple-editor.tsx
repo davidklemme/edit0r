@@ -310,7 +310,7 @@ export default function SimpleEditor() {
             </SelectTrigger>
             <SelectContent>
               {savedKeys.length === 0 && (
-                <SelectItem value="" disabled>No entries</SelectItem>
+                <SelectItem value="no-entries" disabled>No entries</SelectItem>
               )}
               {savedKeys.map((key) => (
                 <SelectItem key={key} value={key}>{key}</SelectItem>
