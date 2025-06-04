@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react'
 import AceEditor from 'react-ace'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen, Check } from 'lucide-react'
 
@@ -285,27 +286,27 @@ export default function SimpleEditor() {
             <SelectItem value="csv">CSV</SelectItem>
           </SelectContent>
         </Select>
-        <div className="space-x-2">
-          <Button onClick={copyToClipboard} title="Copy to Clipboard">
+        <div className="flex flex-wrap items-center space-x-2">
+          <Button size="icon" onClick={copyToClipboard} title="Copy to Clipboard">
             <Copy className="h-4 w-4" />
           </Button>
-          <Button onClick={pasteFromClipboard} title="Paste from Clipboard">
+          <Button size="icon" onClick={pasteFromClipboard} title="Paste from Clipboard">
             <Clipboard className="h-4 w-4" />
           </Button>
-          <Button onClick={formatContent} title="Format Content">
+          <Button size="icon" onClick={formatContent} title="Format Content">
             <FileCode2 className="h-4 w-4" />
           </Button>
-          <Button onClick={validateContent} title="Validate Content">
+          <Button size="icon" onClick={validateContent} title="Validate Content">
             <Check className="h-4 w-4" />
           </Button>
-          <Button onClick={isFlattened ? unflattenContent : flattenContent} title={isFlattened ? "Unflatten Content" : "Flatten Content"}>
+          <Button size="icon" onClick={isFlattened ? unflattenContent : flattenContent} title={isFlattened ? "Unflatten Content" : "Flatten Content"}>
             {isFlattened ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
           </Button>
-          <Button onClick={saveContent} title="Save Content">
+          <Button size="icon" onClick={saveContent} title="Save Content">
             <Save className="h-4 w-4" />
           </Button>
           <Select onValueChange={loadContent} onOpenChange={(open) => open && loadSavedKeys()}>
-            <SelectTrigger className="w-9 px-0">
+            <SelectTrigger className={cn(buttonVariants({ size: 'icon' }))}>
               <FolderOpen className="h-4 w-4" />
             </SelectTrigger>
             <SelectContent>
@@ -317,7 +318,7 @@ export default function SimpleEditor() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={toggleDarkMode} title="Toggle Dark Mode">
+          <Button size="icon" onClick={toggleDarkMode} title="Toggle Dark Mode">
             {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
         </div>
