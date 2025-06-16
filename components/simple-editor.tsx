@@ -15,6 +15,7 @@ import 'ace-builds/src-noconflict/theme-monokai'
 import 'ace-builds/src-noconflict/theme-github'
 
 import Papa from 'papaparse'
+import TextStats from './stats'
 
 export default function SimpleEditor() {
   const [content, setContent] = useState('')
@@ -275,17 +276,22 @@ export default function SimpleEditor() {
     <div className={`container mx-auto p-4 space-y-4 ${isDarkMode ? 'dark' : ''}`}>
 
       <div className="flex justify-between items-center">
-        <Select onValueChange={(value) => setMode(value)}>
-          <SelectTrigger className="w-[180px] px-4 py-2">
-            <SelectValue placeholder="Select mode" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="text">Plain Text</SelectItem>
-            <SelectItem value="json">JSON</SelectItem>
-            <SelectItem value="html">HTML</SelectItem>
-            <SelectItem value="csv">CSV</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className='flex align-middle'>
+          <Select onValueChange={(value) => setMode(value)}>
+            <SelectTrigger className="w-[180px] px-4 py-2">
+              <SelectValue placeholder="Select mode" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="text">Plain Text</SelectItem>
+              <SelectItem value="json">JSON</SelectItem>
+              <SelectItem value="html">HTML</SelectItem>
+              <SelectItem value="csv">CSV</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className='flex ml-4 items-center text-md text-gray-600'>
+            Cookie-free editor, no tracking, no ads, no bullshit.
+          </div>
+        </div>
         <div className="flex flex-wrap items-center space-x-2">
           <Button size="icon" onClick={copyToClipboard} title="Copy to Clipboard">
             <Copy className="h-4 w-4" />
@@ -334,9 +340,9 @@ export default function SimpleEditor() {
           useWorker: false,
           showPrintMargin: false,
         }}
-        style={{ width: '100%', height: '60vh' }}
+        style={{ width: '100%', height: '60vh', borderRadius: '0.5rem' }}
       />
+      <TextStats content={content} />
     </div>
   )
-
 }
