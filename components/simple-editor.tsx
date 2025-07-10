@@ -6,7 +6,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
-import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen, Check, Settings, Undo, Redo } from 'lucide-react'
+import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen, Check, Settings, Undo, Redo, ChevronDown } from 'lucide-react'
 
 import 'ace-builds/src-noconflict/mode-json'
 import 'ace-builds/src-noconflict/mode-html'
@@ -33,6 +33,7 @@ export default function SimpleEditor() {
   const [isFlattened, setIsFlattened] = useState(false)
   const [savedKeys, setSavedKeys] = useState<string[]>([])
   const [lineBreakOptions, setLineBreakOptions] = useState<LineBreakOptions>(defaultLineBreakOptions)
+  const [showLineBreakMenu, setShowLineBreakMenu] = useState(false)
   const [historyManager] = useState(() => new ProcessingHistoryManager())
 
   useEffect(() => {
@@ -355,9 +356,136 @@ export default function SimpleEditor() {
           <Button size="icon" onClick={validateContent} title="Validate Content">
             <Check className="h-4 w-4" />
           </Button>
-          <Button size="icon" onClick={smartLineBreakProcess} title="Smart Line Break Processing">
-            <Settings className="h-4 w-4" />
-          </Button>
+          <div className="relative">
+            <Button 
+              size="icon" 
+              onClick={() => setShowLineBreakMenu(!showLineBreakMenu)}
+              title="Line Break Options"
+              className="relative"
+            >
+              <Settings className="h-4 w-4" />
+              <ChevronDown className="h-2 w-2 absolute -bottom-0.5 -right-0.5" />
+            </Button>
+            
+            {showLineBreakMenu && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setShowLineBreakMenu(false)}
+                />
+                <div className="absolute top-full right-0 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                <div className="p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
+                    <h3 className="text-sm font-medium">Line Break Options</h3>
+                    <button 
+                      onClick={() => setShowLineBreakMenu(false)}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  
+                  <div className="text-xs text-gray-500 mb-3">
+                    Detected: {detectLineEndings(content)} | Lines: {content.split('\n').length}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                                             <label className="flex items-center space-x-2 text-sm">
+                         <input
+                           type="checkbox"
+                           checked={lineBreakOptions.preserveParagraphs}
+                           onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveParagraphs: e.target.checked }))}
+                           className="rounded"
+                         />
+                         <span>Preserve paragraphs</span>
+                       </label>
+                       <label className="flex items-center space-x-2 text-sm">
+                         <input
+                           type="checkbox"
+                           checked={lineBreakOptions.preserveCodeBlocks}
+                           onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveCodeBlocks: e.target.checked }))}
+                           className="rounded"
+                         />
+                         <span>Preserve code blocks</span>
+                       </label>
+                       <label className="flex items-center space-x-2 text-sm">
+                         <input
+                           type="checkbox"
+                           checked={lineBreakOptions.preserveLists}
+                           onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveLists: e.target.checked }))}
+                           className="rounded"
+                         />
+                         <span>Preserve lists</span>
+                       </label>
+                       <label className="flex items-center space-x-2 text-sm">
+                         <input
+                           type="checkbox"
+                           checked={lineBreakOptions.removeEmptyLines}
+                           onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, removeEmptyLines: e.target.checked }))}
+                           className="rounded"
+                         />
+                         <span>Remove empty lines</span>
+                       </label>
+                      <label className="flex items-center space-x-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={lineBreakOptions.intelligentSpacing}
+                          onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, intelligentSpacing: e.target.checked }))}
+                          className="rounded"
+                        />
+                        <span>Intelligent spacing</span>
+                      </label>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium">Line endings:</label>
+                      <Select 
+                        value={lineBreakOptions.normalizeLineEndings} 
+                        onValueChange={(value: LineEndingType) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, normalizeLineEndings: value }))}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="LF">LF (Unix)</SelectItem>
+                          <SelectItem value="CRLF">CRLF (Windows)</SelectItem>
+                          <SelectItem value="CR">CR (Mac)</SelectItem>
+                          <SelectItem value="MIXED">Keep as is</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          smartLineBreakProcess()
+                          setShowLineBreakMenu(false)
+                        }}
+                      >
+                        Process Line Breaks
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => setLineBreakOptions(defaultLineBreakOptions)}
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                    
+                    {historyManager.canUndo() && (
+                      <div className="text-xs text-gray-500 pt-1">
+                        Last: {historyManager.getCurrentEntry()?.operation || 'None'}
+                      </div>
+                    )}
+                  </div>
+                                  </div>
+                </div>
+              </>
+              )}
+            </div>
           <Button size="icon" onClick={isFlattened ? unflattenContent : flattenContent} title={isFlattened ? "Unflatten Content" : "Enhanced Flatten Content"}>
             {isFlattened ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
           </Button>
@@ -399,100 +527,7 @@ export default function SimpleEditor() {
         </div>
       </div>
 
-      {/* Line Break Configuration Panel */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Smart Line Break Options</h3>
-          <div className="text-xs text-gray-500">
-            Detected: {detectLineEndings(content)} | Lines: {content.split('\n').length}
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <label className="flex items-center space-x-2 text-sm">
-              <input
-                type="checkbox"
-                checked={lineBreakOptions.preserveParagraphs}
-                onChange={(e) => setLineBreakOptions(prev => ({ ...prev, preserveParagraphs: e.target.checked }))}
-                className="rounded"
-              />
-              <span>Preserve paragraphs</span>
-            </label>
-            <label className="flex items-center space-x-2 text-sm">
-              <input
-                type="checkbox"
-                checked={lineBreakOptions.preserveCodeBlocks}
-                onChange={(e) => setLineBreakOptions(prev => ({ ...prev, preserveCodeBlocks: e.target.checked }))}
-                className="rounded"
-              />
-              <span>Preserve code blocks</span>
-            </label>
-            <label className="flex items-center space-x-2 text-sm">
-              <input
-                type="checkbox"
-                checked={lineBreakOptions.preserveLists}
-                onChange={(e) => setLineBreakOptions(prev => ({ ...prev, preserveLists: e.target.checked }))}
-                className="rounded"
-              />
-              <span>Preserve lists</span>
-            </label>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="flex items-center space-x-2 text-sm">
-              <input
-                type="checkbox"
-                checked={lineBreakOptions.removeEmptyLines}
-                onChange={(e) => setLineBreakOptions(prev => ({ ...prev, removeEmptyLines: e.target.checked }))}
-                className="rounded"
-              />
-              <span>Remove empty lines</span>
-            </label>
-            <label className="flex items-center space-x-2 text-sm">
-              <input
-                type="checkbox"
-                checked={lineBreakOptions.intelligentSpacing}
-                onChange={(e) => setLineBreakOptions(prev => ({ ...prev, intelligentSpacing: e.target.checked }))}
-                className="rounded"
-              />
-              <span>Intelligent spacing</span>
-            </label>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="block text-sm font-medium">Line endings:</label>
-            <Select 
-              value={lineBreakOptions.normalizeLineEndings} 
-              onValueChange={(value: LineEndingType) => setLineBreakOptions(prev => ({ ...prev, normalizeLineEndings: value }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="LF">LF (Unix)</SelectItem>
-                <SelectItem value="CRLF">CRLF (Windows)</SelectItem>
-                <SelectItem value="CR">CR (Mac)</SelectItem>
-                <SelectItem value="MIXED">Keep as is</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        
-        <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex space-x-2">
-            <Button size="sm" onClick={smartLineBreakProcess}>
-              Process Line Breaks
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setLineBreakOptions(defaultLineBreakOptions)}>
-              Reset Options
-            </Button>
-          </div>
-          <div className="text-xs text-gray-500">
-            {historyManager.canUndo() && `Last: ${historyManager.getCurrentEntry()?.operation || 'None'}`}
-          </div>
-        </div>
-      </div>
+
 
       <AceEditor
         mode={mode}
