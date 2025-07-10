@@ -6,7 +6,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
-import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen, Check } from 'lucide-react'
+import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen, Check, MoreHorizontal, AlignLeft, Settings } from 'lucide-react'
 
 import 'ace-builds/src-noconflict/mode-json'
 import 'ace-builds/src-noconflict/mode-html'
@@ -16,6 +16,15 @@ import 'ace-builds/src-noconflict/theme-github'
 
 import Papa from 'papaparse'
 import TextStats from './stats'
+import { 
+  smartRemoveLineBreaks, 
+  flattenForAPI, 
+  normalizeLineEndings, 
+  removeEmptyLines, 
+  normalizeLineBreaks,
+  getLineBreakStats,
+  type LineBreakOptions 
+} from '@/lib/utils'
 
 export default function SimpleEditor() {
   const [content, setContent] = useState('')
@@ -23,6 +32,15 @@ export default function SimpleEditor() {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [isFlattened, setIsFlattened] = useState(false)
   const [savedKeys, setSavedKeys] = useState<string[]>([])
+  const [showLineBreakOptions, setShowLineBreakOptions] = useState(false)
+  const [lineBreakOptions, setLineBreakOptions] = useState<LineBreakOptions>({
+    preserveParagraphs: true,
+    preserveCodeBlocks: true,
+    preserveLists: true,
+    normalizeSpacing: true,
+    removeEmptyLines: false,
+    lineEndingType: 'LF'
+  })
 
   useEffect(() => {
     // Apply custom styles to AceEditor and global scrollbars
@@ -219,20 +237,33 @@ export default function SimpleEditor() {
     setIsDarkMode(!isDarkMode);
   }
 
-  const flattenContent = () => {
+  const handleSmartLineBreakRemoval = () => {
     try {
-      let flattened = content
-        .replace(/\s+/g, ' ')  // Replace all whitespace (including newlines) with a single space
-        .trim();  // Remove leading and trailing whitespace
+      const processed = smartRemoveLineBreaks(content, lineBreakOptions);
+      setContent(processed);
+      toast({
+        title: 'Smart line break removal applied',
+        description: 'Line breaks removed while preserving content structure.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Processing failed',
+        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      });
+    }
+  }
 
-      // Escape special characters
+  const flattenForAPIUsage = () => {
+    try {
+      let flattened = flattenForAPI(content);
+      // Escape special characters for URL encoding
       flattened = encodeURIComponent(flattened);
-
       setContent(flattened);
       setIsFlattened(true);
       toast({
-        title: 'Content flattened',
-        description: 'The content has been flattened and escaped for use in URLs or API calls.',
+        title: 'Content flattened for API',
+        description: 'Content completely flattened and URL-encoded for API usage.',
       });
     } catch (error) {
       toast({
@@ -243,35 +274,46 @@ export default function SimpleEditor() {
     }
   }
 
-  const unflattenContent = () => {
+  const normalizeContent = () => {
     try {
-      // Decode the URL-encoded content
-      let unflattened = decodeURIComponent(content);
-
-      // Format the content based on the current mode
-      if (mode === 'json') {
-        unflattened = JSON.stringify(JSON.parse(unflattened), null, 2);
-      } else if (mode === 'html') {
-        unflattened = formatHTML(unflattened);
-      } else if (mode === 'csv') {
-        const parsed = Papa.parse(unflattened, { header: true });
-        unflattened = Papa.unparse(parsed.data, { quotes: true });
+      let normalized = content;
+      if (lineBreakOptions.removeEmptyLines) {
+        normalized = removeEmptyLines(normalized);
       }
-
-      setContent(unflattened);
-      setIsFlattened(false);
+      normalized = normalizeLineBreaks(normalized);
+      normalized = normalizeLineEndings(normalized, lineBreakOptions.lineEndingType || 'LF');
+      
+      setContent(normalized);
       toast({
-        title: 'Content unflattened',
-        description: 'The content has been unflattened and formatted.',
+        title: 'Content normalized',
+        description: 'Line endings and spacing have been normalized.',
       });
     } catch (error) {
       toast({
-        title: 'Unflattening failed',
+        title: 'Normalization failed',
         description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive',
       });
     }
   }
+
+  const showLineBreakStats = () => {
+    try {
+      const stats = getLineBreakStats(content);
+      toast({
+        title: 'Line Break Analysis',
+        description: `Lines: ${stats.totalLines}, Empty: ${stats.emptyLines}, Has code: ${stats.hasCodeBlocks ? 'Yes' : 'No'}, Has lists: ${stats.hasLists ? 'Yes' : 'No'}`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Analysis failed',
+        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      });
+    }
+  }
+
+
   return (
     <div className={`container mx-auto p-4 space-y-4 ${isDarkMode ? 'dark' : ''}`}>
 
@@ -305,8 +347,17 @@ export default function SimpleEditor() {
           <Button size="icon" onClick={validateContent} title="Validate Content">
             <Check className="h-4 w-4" />
           </Button>
-          <Button size="icon" onClick={isFlattened ? unflattenContent : flattenContent} title={isFlattened ? "Unflatten Content" : "Flatten Content"}>
-            {isFlattened ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+          <Button size="icon" onClick={handleSmartLineBreakRemoval} title="Smart Line Break Removal">
+            <AlignLeft className="h-4 w-4" />
+          </Button>
+          <Button size="icon" onClick={flattenForAPIUsage} title="Flatten for API Usage">
+            <Minimize2 className="h-4 w-4" />
+          </Button>
+          <Button size="icon" onClick={normalizeContent} title="Normalize Line Endings">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+          <Button size="icon" onClick={showLineBreakStats} title="Line Break Analysis">
+            <Settings className="h-4 w-4" />
           </Button>
           <Button size="icon" onClick={saveContent} title="Save Content">
             <Save className="h-4 w-4" />
@@ -329,6 +380,99 @@ export default function SimpleEditor() {
           </Button>
         </div>
       </div>
+
+      {/* Line Break Processing Options Panel */}
+      <div className="space-y-2">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => setShowLineBreakOptions(!showLineBreakOptions)}
+          className="flex items-center space-x-2"
+        >
+          <Settings className="h-4 w-4" />
+          <span>Line Break Options</span>
+          <span className={`transform transition-transform ${showLineBreakOptions ? 'rotate-180' : ''}`}>▼</span>
+        </Button>
+        
+        {showLineBreakOptions && (
+          <div className="bg-slate-100 dark:bg-slate-700 p-4 rounded-lg space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Preserve Structure</h4>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={lineBreakOptions.preserveParagraphs}
+                    onChange={(e) => setLineBreakOptions(prev => ({ ...prev, preserveParagraphs: e.target.checked }))}
+                    className="rounded"
+                  />
+                  <span className="text-sm">Paragraphs</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={lineBreakOptions.preserveCodeBlocks}
+                    onChange={(e) => setLineBreakOptions(prev => ({ ...prev, preserveCodeBlocks: e.target.checked }))}
+                    className="rounded"
+                  />
+                  <span className="text-sm">Code Blocks</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={lineBreakOptions.preserveLists}
+                    onChange={(e) => setLineBreakOptions(prev => ({ ...prev, preserveLists: e.target.checked }))}
+                    className="rounded"
+                  />
+                  <span className="text-sm">Lists</span>
+                </label>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Processing Options</h4>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={lineBreakOptions.normalizeSpacing}
+                    onChange={(e) => setLineBreakOptions(prev => ({ ...prev, normalizeSpacing: e.target.checked }))}
+                    className="rounded"
+                  />
+                  <span className="text-sm">Normalize Spacing</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={lineBreakOptions.removeEmptyLines}
+                    onChange={(e) => setLineBreakOptions(prev => ({ ...prev, removeEmptyLines: e.target.checked }))}
+                    className="rounded"
+                  />
+                  <span className="text-sm">Remove Empty Lines</span>
+                </label>
+                
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Line Ending Type</label>
+                  <Select 
+                    value={lineBreakOptions.lineEndingType} 
+                    onValueChange={(value: 'LF' | 'CRLF' | 'CR') => 
+                      setLineBreakOptions(prev => ({ ...prev, lineEndingType: value }))
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LF">LF (Unix/Mac)</SelectItem>
+                      <SelectItem value="CRLF">CRLF (Windows)</SelectItem>
+                      <SelectItem value="CR">CR (Classic Mac)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <AceEditor
         mode={mode}
         theme={isDarkMode ? "monokai" : "github"}
