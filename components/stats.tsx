@@ -7,10 +7,24 @@ export default function TextStats({ content }: { content: string }) {
     //https://stackoverflow.com/questions/76216113/how-can-i-count-tokens-before-making-api-call
     const tokens = chars * 0.21787944117144232159552377016146
 
-    return <div className="flex justify-start text-slate-500 align-middle gap-4">
-        <p>Characters: {chars.toFixed(0)}</p>
-        <p>Words: {words.toFixed(0)}</p>
-        <p>Lines: {lines.toFixed(0)}</p>
-        <p>Tokens: {tokens.toFixed(0)}</p>
-    </div>
+    return (
+        <div className="grid grid-cols-2 sm:flex sm:justify-start text-slate-500 dark:text-slate-400 gap-3 sm:gap-4 text-sm p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center">
+                <span className="font-medium sm:mr-1">Characters:</span> 
+                <span>{chars.toFixed(0)}</span>
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+                <span className="font-medium sm:mr-1">Words:</span> 
+                <span>{words.toFixed(0)}</span>
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+                <span className="font-medium sm:mr-1">Lines:</span> 
+                <span>{lines.toFixed(0)}</span>
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+                <span className="font-medium sm:mr-1">Tokens:</span> 
+                <span>{tokens.toFixed(0)}</span>
+            </div>
+        </div>
+    )
 }
