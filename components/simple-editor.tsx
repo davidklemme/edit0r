@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect } from 'react'
 import AceEditor from 'react-ace'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
-import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen, Check } from 'lucide-react'
+import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen, Check, Settings, Undo, Redo, ChevronDown } from 'lucide-react'
 
 import 'ace-builds/src-noconflict/mode-json'
 import 'ace-builds/src-noconflict/mode-html'
@@ -16,6 +15,15 @@ import 'ace-builds/src-noconflict/theme-github'
 
 import Papa from 'papaparse'
 import TextStats from './stats'
+import { 
+  LineBreakOptions, 
+  LineEndingType, 
+  defaultLineBreakOptions, 
+  smartRemoveLineBreaks, 
+  enhancedFlattenContent,
+  ProcessingHistoryManager,
+  detectLineEndings 
+} from '@/lib/utils'
 
 export default function SimpleEditor() {
   const [content, setContent] = useState('')
@@ -23,6 +31,10 @@ export default function SimpleEditor() {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [isFlattened, setIsFlattened] = useState(false)
   const [savedKeys, setSavedKeys] = useState<string[]>([])
+  const [lineBreakOptions, setLineBreakOptions] = useState<LineBreakOptions>(defaultLineBreakOptions)
+  const [showLineBreakMenu, setShowLineBreakMenu] = useState(false)
+  const [historyManager] = useState(() => new ProcessingHistoryManager())
+  const [windowSize, setWindowSize] = useState({ width: 0, height: 0 })
 
   useEffect(() => {
     // Apply custom styles to AceEditor and global scrollbars
@@ -80,6 +92,21 @@ export default function SimpleEditor() {
 
   useEffect(() => {
     loadSavedKeys()
+  }, [])
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({ 
+        width: window.innerWidth, 
+        height: window.innerHeight 
+      })
+    }
+    
+    // Set initial size
+    handleResize()
+    
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   const formatContent = () => {
@@ -219,27 +246,66 @@ export default function SimpleEditor() {
     setIsDarkMode(!isDarkMode);
   }
 
+  const addToHistory = (newContent: string, operation: string) => {
+    historyManager.addToHistory(content, operation)
+    setContent(newContent)
+  }
+
+  const handleUndo = () => {
+    const historyEntry = historyManager.undo()
+    if (historyEntry) {
+      setContent(historyEntry.content)
+      toast({
+        title: 'Undone',
+        description: `Reverted: ${historyEntry.operation}`,
+      })
+    }
+  }
+
+  const handleRedo = () => {
+    const historyEntry = historyManager.redo()
+    if (historyEntry) {
+      setContent(historyEntry.content)
+      toast({
+        title: 'Redone',
+        description: `Reapplied: ${historyEntry.operation}`,
+      })
+    }
+  }
+
+  const smartLineBreakProcess = () => {
+    try {
+      const processed = smartRemoveLineBreaks(content, lineBreakOptions)
+      addToHistory(processed, 'Smart Line Break Processing')
+      setIsFlattened(false)
+      toast({
+        title: 'Line breaks processed',
+        description: 'Content has been processed with smart line break management.',
+      })
+    } catch (error) {
+      toast({
+        title: 'Processing failed',
+        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      })
+    }
+  }
+
   const flattenContent = () => {
     try {
-      let flattened = content
-        .replace(/\s+/g, ' ')  // Replace all whitespace (including newlines) with a single space
-        .trim();  // Remove leading and trailing whitespace
-
-      // Escape special characters
-      flattened = encodeURIComponent(flattened);
-
-      setContent(flattened);
-      setIsFlattened(true);
+      const flattened = enhancedFlattenContent(content, lineBreakOptions)
+      addToHistory(flattened, 'Enhanced Content Flattening')
+      setIsFlattened(true)
       toast({
         title: 'Content flattened',
-        description: 'The content has been flattened and escaped for use in URLs or API calls.',
-      });
+        description: 'The content has been intelligently flattened and escaped for use in URLs or API calls.',
+      })
     } catch (error) {
       toast({
         title: 'Flattening failed',
         description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive',
-      });
+      })
     }
   }
 
@@ -273,12 +339,14 @@ export default function SimpleEditor() {
     }
   }
   return (
-    <div className={`container mx-auto p-4 space-y-4 ${isDarkMode ? 'dark' : ''}`}>
+    <div className={`min-h-screen w-full p-2 sm:p-4 space-y-3 sm:space-y-4 ${isDarkMode ? 'dark' : ''}`}>
 
-      <div className="flex justify-between items-center">
-        <div className='flex align-middle'>
+      {/* Mobile-first header */}
+      <div className="flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
+        {/* Top row: Mode selector and tagline */}
+        <div className='flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-y-0'>
           <Select onValueChange={(value) => setMode(value)}>
-            <SelectTrigger className="w-[180px] px-4 py-2">
+            <SelectTrigger className="w-full sm:w-[180px] h-12 sm:h-10 px-4 py-2 text-base sm:text-sm">
               <SelectValue placeholder="Select mode" />
             </SelectTrigger>
             <SelectContent>
@@ -288,61 +356,292 @@ export default function SimpleEditor() {
               <SelectItem value="csv">CSV</SelectItem>
             </SelectContent>
           </Select>
-          <div className='flex ml-4 items-center text-md text-gray-600'>
+          <div className='text-xs sm:text-sm text-gray-600 dark:text-gray-400 sm:ml-4 text-center sm:text-left'>
             Cookie-free editor, no tracking, no ads, no bullshit.
           </div>
         </div>
-        <div className="flex flex-wrap items-center space-x-2">
-          <Button size="icon" onClick={copyToClipboard} title="Copy to Clipboard">
-            <Copy className="h-4 w-4" />
-          </Button>
-          <Button size="icon" onClick={pasteFromClipboard} title="Paste from Clipboard">
-            <Clipboard className="h-4 w-4" />
-          </Button>
-          <Button size="icon" onClick={formatContent} title="Format Content">
-            <FileCode2 className="h-4 w-4" />
-          </Button>
-          <Button size="icon" onClick={validateContent} title="Validate Content">
-            <Check className="h-4 w-4" />
-          </Button>
-          <Button size="icon" onClick={isFlattened ? unflattenContent : flattenContent} title={isFlattened ? "Unflatten Content" : "Flatten Content"}>
-            {isFlattened ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
-          </Button>
-          <Button size="icon" onClick={saveContent} title="Save Content">
-            <Save className="h-4 w-4" />
-          </Button>
-          <Select onValueChange={loadContent} onOpenChange={(open) => open && loadSavedKeys()}>
-            <SelectTrigger className={cn(buttonVariants({ size: 'icon' }))}>
-              <FolderOpen className="h-4 w-4" />
-            </SelectTrigger>
-            <SelectContent>
-              {savedKeys.length === 0 && (
-                <SelectItem value="no-entries" disabled>No entries</SelectItem>
+                {/* Mobile-first toolbar */}
+        <div className="flex flex-col space-y-3 sm:space-y-0">
+          {/* Primary actions row */}
+          <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
+            {/* Essential actions group */}
+            <div className="flex gap-1">
+              <Button 
+                size="default" 
+                className="h-12 w-12 sm:h-10 sm:w-10" 
+                onClick={copyToClipboard} 
+                title="Copy to Clipboard"
+              >
+                <Copy className="h-5 w-5 sm:h-4 sm:w-4" />
+              </Button>
+              <Button 
+                size="default" 
+                className="h-12 w-12 sm:h-10 sm:w-10" 
+                onClick={pasteFromClipboard} 
+                title="Paste from Clipboard"
+              >
+                <Clipboard className="h-5 w-5 sm:h-4 sm:w-4" />
+              </Button>
+            </div>
+
+            {/* Format actions group */}
+            <div className="flex gap-1">
+              <Button 
+                size="default" 
+                className="h-12 w-12 sm:h-10 sm:w-10" 
+                onClick={formatContent} 
+                title="Format Content"
+              >
+                <FileCode2 className="h-5 w-5 sm:h-4 sm:w-4" />
+              </Button>
+              <Button 
+                size="default" 
+                className="h-12 w-12 sm:h-10 sm:w-10" 
+                onClick={validateContent} 
+                title="Validate Content"
+              >
+                <Check className="h-5 w-5 sm:h-4 sm:w-4" />
+              </Button>
+            </div>
+
+            {/* Line break menu */}
+            <div className="relative">
+              <Button 
+                size="default"
+                className="h-12 w-12 sm:h-10 sm:w-10 relative" 
+                onClick={() => setShowLineBreakMenu(!showLineBreakMenu)}
+                title="Line Break Options"
+              >
+                <Settings className="h-5 w-5 sm:h-4 sm:w-4" />
+                <ChevronDown className="h-3 w-3 sm:h-2 sm:w-2 absolute -bottom-0.5 -right-0.5" />
+              </Button>
+              
+              {showLineBreakMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowLineBreakMenu(false)}
+                  />
+                  <div className="absolute top-full right-0 mt-2 w-[90vw] max-w-sm sm:w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                    <div className="p-4 space-y-4">
+                      <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
+                        <h3 className="text-sm font-medium">Line Break Options</h3>
+                        <button 
+                          onClick={() => setShowLineBreakMenu(false)}
+                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500 mb-3">
+                        Detected: {detectLineEndings(content)} | Lines: {content.split('\n').length}
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-3">
+                          <label className="flex items-center space-x-3 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={lineBreakOptions.preserveParagraphs}
+                              onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveParagraphs: e.target.checked }))}
+                              className="rounded h-4 w-4"
+                            />
+                            <span>Preserve paragraphs</span>
+                          </label>
+                          <label className="flex items-center space-x-3 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={lineBreakOptions.preserveCodeBlocks}
+                              onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveCodeBlocks: e.target.checked }))}
+                              className="rounded h-4 w-4"
+                            />
+                            <span>Preserve code blocks</span>
+                          </label>
+                          <label className="flex items-center space-x-3 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={lineBreakOptions.preserveLists}
+                              onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveLists: e.target.checked }))}
+                              className="rounded h-4 w-4"
+                            />
+                            <span>Preserve lists</span>
+                          </label>
+                          <label className="flex items-center space-x-3 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={lineBreakOptions.removeEmptyLines}
+                              onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, removeEmptyLines: e.target.checked }))}
+                              className="rounded h-4 w-4"
+                            />
+                            <span>Remove empty lines</span>
+                          </label>
+                          <label className="flex items-center space-x-3 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={lineBreakOptions.intelligentSpacing}
+                              onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, intelligentSpacing: e.target.checked }))}
+                              className="rounded h-4 w-4"
+                            />
+                            <span>Intelligent spacing</span>
+                          </label>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium">Line endings:</label>
+                          <Select 
+                            value={lineBreakOptions.normalizeLineEndings} 
+                            onValueChange={(value: LineEndingType) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, normalizeLineEndings: value }))}
+                          >
+                            <SelectTrigger className="w-full h-10">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="LF">LF (Unix)</SelectItem>
+                              <SelectItem value="CRLF">CRLF (Windows)</SelectItem>
+                              <SelectItem value="CR">CR (Mac)</SelectItem>
+                              <SelectItem value="MIXED">Keep as is</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                          <Button 
+                            size="sm" 
+                            className="flex-1 h-10"
+                            onClick={() => {
+                              smartLineBreakProcess()
+                              setShowLineBreakMenu(false)
+                            }}
+                          >
+                            Process Line Breaks
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="flex-1 h-10"
+                            onClick={() => setLineBreakOptions(defaultLineBreakOptions)}
+                          >
+                            Reset
+                          </Button>
+                        </div>
+                        
+                        {historyManager.canUndo() && (
+                          <div className="text-xs text-gray-500 pt-1">
+                            Last: {historyManager.getCurrentEntry()?.operation || 'None'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
-              {savedKeys.map((key) => (
-                <SelectItem key={key} value={key}>{key}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button size="icon" onClick={toggleDarkMode} title="Toggle Dark Mode">
-            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
+            </div>
+
+            {/* Transform actions group */}
+            <div className="flex gap-1">
+              <Button 
+                size="default" 
+                className="h-12 w-12 sm:h-10 sm:w-10" 
+                onClick={isFlattened ? unflattenContent : flattenContent} 
+                title={isFlattened ? "Unflatten Content" : "Enhanced Flatten Content"}
+              >
+                {isFlattened ? <Maximize2 className="h-5 w-5 sm:h-4 sm:w-4" /> : <Minimize2 className="h-5 w-5 sm:h-4 sm:w-4" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* Secondary actions row */}
+          <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
+            {/* History group */}
+            <div className="flex gap-1">
+              <Button 
+                size="default"
+                className="h-12 w-12 sm:h-10 sm:w-10" 
+                onClick={handleUndo} 
+                disabled={!historyManager.canUndo()}
+                title="Undo"
+              >
+                <Undo className="h-5 w-5 sm:h-4 sm:w-4" />
+              </Button>
+              <Button 
+                size="default"
+                className="h-12 w-12 sm:h-10 sm:w-10" 
+                onClick={handleRedo} 
+                disabled={!historyManager.canRedo()}
+                title="Redo"
+              >
+                <Redo className="h-5 w-5 sm:h-4 sm:w-4" />
+              </Button>
+            </div>
+
+            {/* Storage group */}
+            <div className="flex gap-1">
+              <Button 
+                size="default" 
+                className="h-12 w-12 sm:h-10 sm:w-10" 
+                onClick={saveContent} 
+                title="Save Content"
+              >
+                <Save className="h-5 w-5 sm:h-4 sm:w-4" />
+              </Button>
+              <Select onValueChange={loadContent} onOpenChange={(open) => open && loadSavedKeys()}>
+                <SelectTrigger className="h-12 w-12 sm:h-10 sm:w-10 p-0">
+                  <FolderOpen className="h-5 w-5 sm:h-4 sm:w-4" />
+                </SelectTrigger>
+                <SelectContent>
+                  {savedKeys.length === 0 && (
+                    <SelectItem value="no-entries" disabled>No entries</SelectItem>
+                  )}
+                  {savedKeys.map((key) => (
+                    <SelectItem key={key} value={key}>{key}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Theme toggle */}
+            <Button 
+              size="default" 
+              className="h-12 w-12 sm:h-10 sm:w-10" 
+              onClick={toggleDarkMode} 
+              title="Toggle Dark Mode"
+            >
+              {isDarkMode ? <Sun className="h-5 w-5 sm:h-4 sm:w-4" /> : <Moon className="h-5 w-5 sm:h-4 sm:w-4" />}
+            </Button>
+          </div>
         </div>
       </div>
-      <AceEditor
-        mode={mode}
-        theme={isDarkMode ? "monokai" : "github"}
-        onChange={setContent}
-        value={content}
-        name="editor"
-        editorProps={{ $blockScrolling: true }}
-        setOptions={{
-          useWorker: false,
-          showPrintMargin: false,
-        }}
-        style={{ width: '100%', height: '60vh', borderRadius: '0.5rem' }}
-      />
-      <TextStats content={content} />
+
+
+
+      {/* Mobile-first editor */}
+      <div className="w-full">
+        <AceEditor
+          mode={mode}
+          theme={isDarkMode ? "monokai" : "github"}
+          onChange={setContent}
+          value={content}
+          name="editor"
+          editorProps={{ $blockScrolling: true }}
+          setOptions={{
+            useWorker: false,
+            showPrintMargin: false,
+            fontSize: windowSize.width < 640 ? 16 : 14,
+          }}
+          style={{ 
+            width: '100%', 
+            height: windowSize.height < 700 ? '50vh' : '60vh',
+            borderRadius: '0.5rem',
+            minHeight: '300px'
+          }}
+        />
+      </div>
+      
+      {/* Mobile-optimized stats */}
+      <div className="w-full">
+        <TextStats content={content} />
+      </div>
     </div>
   )
 }
