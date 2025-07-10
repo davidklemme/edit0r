@@ -33,7 +33,6 @@ export default function SimpleEditor() {
   const [isFlattened, setIsFlattened] = useState(false)
   const [savedKeys, setSavedKeys] = useState<string[]>([])
   const [lineBreakOptions, setLineBreakOptions] = useState<LineBreakOptions>(defaultLineBreakOptions)
-  const [showLineBreakOptions, setShowLineBreakOptions] = useState(false)
   const [historyManager] = useState(() => new ProcessingHistoryManager())
 
   useEffect(() => {

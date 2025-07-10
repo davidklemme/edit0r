@@ -53,7 +53,7 @@ export function normalizeLineEndings(content: string, targetType: LineEndingType
   if (targetType === 'MIXED') return content
   
   // First normalize all to LF
-  let normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
   
   // Then convert to target type
   switch (targetType) {
