@@ -1,0 +1,12 @@
+{
+  "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Explain quantum computing"
+    }
+  ],
+  "temperature": 0.8,
+  "max_tokens": 2048,
+  "top_p": 0.9
+}

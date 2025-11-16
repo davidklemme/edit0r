@@ -1,8 +1,11 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import AceEditor from 'react-ace'
-import { Button } from '@/components/ui/button'
+
+import type { Ace } from 'ace-builds'
+import { Button, buttonVariants } from '@/components/ui/button'
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
 import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen, Check, Settings, Undo, Redo, ChevronDown } from 'lucide-react'
@@ -15,15 +18,11 @@ import 'ace-builds/src-noconflict/theme-github'
 
 import Papa from 'papaparse'
 import TextStats from './stats'
-import { 
-  LineBreakOptions, 
-  LineEndingType, 
-  defaultLineBreakOptions, 
-  smartRemoveLineBreaks, 
-  enhancedFlattenContent,
-  ProcessingHistoryManager,
-  detectLineEndings 
-} from '@/lib/utils'
+
+import { providerDetector, providerValidator, getProviderConfig, getSupportedProviders } from '@/lib/ai-providers'
+import type { ProviderDetectionResult, ValidationResult, AIProvider } from '@/lib/ai-providers'
+import { ProcessingHistoryManager, smartRemoveLineBreaks, enhancedFlattenContent, detectLineEndings, defaultLineBreakOptions } from '@/lib/utils'
+import type { LineBreakOptions, LineEndingType } from '@/lib/utils'
 
 export default function SimpleEditor() {
   const [content, setContent] = useState('')
@@ -31,10 +30,13 @@ export default function SimpleEditor() {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [isFlattened, setIsFlattened] = useState(false)
   const [savedKeys, setSavedKeys] = useState<string[]>([])
-  const [lineBreakOptions, setLineBreakOptions] = useState<LineBreakOptions>(defaultLineBreakOptions)
+  const [detectionResult, setDetectionResult] = useState<ProviderDetectionResult | null>(null)
+  const [manualProvider, setManualProvider] = useState<AIProvider | null>(null)
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
   const [showLineBreakMenu, setShowLineBreakMenu] = useState(false)
-  const [historyManager] = useState(() => new ProcessingHistoryManager())
-  const [windowSize, setWindowSize] = useState({ width: 0, height: 0 })
+  const [lineBreakOptions, setLineBreakOptions] = useState<LineBreakOptions>(defaultLineBreakOptions)
+  const editorRef = useRef<Ace.Editor | null>(null)
+  const historyManager = useRef(new ProcessingHistoryManager()).current
 
   useEffect(() => {
     // Apply custom styles to AceEditor and global scrollbars
@@ -94,20 +96,109 @@ export default function SimpleEditor() {
     loadSavedKeys()
   }, [])
 
+  // Detect AI provider when content changes (debounced)
   useEffect(() => {
-    const handleResize = () => {
-      setWindowSize({ 
-        width: window.innerWidth, 
-        height: window.innerHeight 
+    if (mode !== 'json' || !content.trim()) {
+      setDetectionResult(null)
+      setValidationResult(null)
+      return
+    }
+
+    const timeoutId = setTimeout(() => {
+      try {
+        const result = providerDetector.detect(content)
+        // Only show detection if confidence is above threshold
+        if (result.confidence >= 0.3) {
+          setDetectionResult(result)
+        } else {
+          setDetectionResult(null)
+        }
+      } catch {
+        setDetectionResult(null)
+      }
+    }, 500) // 500ms debounce
+
+    return () => clearTimeout(timeoutId)
+  }, [content, mode])
+
+  // Validate content when provider or content changes
+  useEffect(() => {
+    if (mode !== 'json' || !content.trim()) {
+      setValidationResult(null)
+      return
+    }
+
+    const timeoutId = setTimeout(() => {
+      try {
+        const config = JSON.parse(content)
+        const provider = manualProvider || detectionResult?.provider
+
+        if (provider && provider !== 'generic') {
+          const result = providerValidator.validate(config, provider)
+          setValidationResult(result)
+        } else {
+          setValidationResult(null)
+        }
+      } catch {
+        // Invalid JSON - will be caught by validation
+        setValidationResult(null)
+      }
+    }, 500) // 500ms debounce
+
+    return () => clearTimeout(timeoutId)
+  }, [content, mode, manualProvider, detectionResult])
+
+  // Update editor annotations when validation changes
+  useEffect(() => {
+    if (!editorRef.current) return
+
+    // Helper to find line number for a field in JSON content
+    const findLineForField = (fieldPath: string): number => {
+      const lines = content.split('\n')
+      const fieldName = fieldPath.split('.').pop()?.replace(/\[.*\]/, '') || fieldPath
+
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes(`"${fieldName}"`)) {
+          return i
+        }
+      }
+
+      const parentField = fieldPath.split('[')[0]
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes(`"${parentField}"`)) {
+          return i
+        }
+      }
+
+      return 0
+    }
+
+    const annotations: Ace.Annotation[] = []
+
+    if (validationResult) {
+      // Add error annotations
+      validationResult.errors.forEach((error) => {
+        annotations.push({
+          row: findLineForField(error.field),
+          column: 0,
+          text: `${error.field}: ${error.message}`,
+          type: 'error',
+        })
+      })
+
+      // Add warning annotations
+      validationResult.warnings.forEach((warning) => {
+        annotations.push({
+          row: findLineForField(warning.field),
+          column: 0,
+          text: `${warning.field}: ${warning.message}`,
+          type: 'warning',
+        })
       })
     }
-    
-    // Set initial size
-    handleResize()
-    
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
+
+    editorRef.current.getSession().setAnnotations(annotations)
+  }, [validationResult, content])
 
   const formatContent = () => {
     try {
@@ -338,13 +429,11 @@ export default function SimpleEditor() {
       });
     }
   }
-  return (
-    <div className={`min-h-screen w-full p-2 sm:p-4 space-y-3 sm:space-y-4 ${isDarkMode ? 'dark' : ''}`}>
 
-      {/* Mobile-first header */}
-      <div className="flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
-        {/* Top row: Mode selector and tagline */}
-        <div className='flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-y-0'>
+  return (
+    <div className={`flex flex-col h-full w-full ${isDarkMode ? 'dark' : ''}`}>
+      <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className='flex align-middle'>
           <Select onValueChange={(value) => setMode(value)}>
             <SelectTrigger className="w-full sm:w-[180px] h-12 sm:h-10 px-4 py-2 text-base sm:text-sm">
               <SelectValue placeholder="Select mode" />
@@ -356,7 +445,38 @@ export default function SimpleEditor() {
               <SelectItem value="csv">CSV</SelectItem>
             </SelectContent>
           </Select>
-          <div className='text-xs sm:text-sm text-gray-600 dark:text-gray-400 sm:ml-4 text-center sm:text-left'>
+          <Select
+            onValueChange={(value) => setManualProvider(value === 'auto' ? null : (value as AIProvider))}
+            value={manualProvider || 'auto'}
+          >
+            <SelectTrigger className="w-[200px] px-4 py-2 ml-4">
+              <SelectValue placeholder="Provider (auto)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Auto-detect</SelectItem>
+              {getSupportedProviders().filter(p => p !== 'generic').map((provider) => (
+                <SelectItem key={provider} value={provider}>
+                  {getProviderConfig(provider).displayName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {(manualProvider || detectionResult) && (
+            <div
+              className={`ml-4 px-3 py-1 rounded-full text-sm font-medium ${
+                getProviderConfig(manualProvider || detectionResult!.provider).badgeStyles
+              }`}
+              title={
+                detectionResult
+                  ? `Confidence: ${(detectionResult.confidence * 100).toFixed(0)}% - ${detectionResult.indicators.join(', ')}`
+                  : 'Manually selected'
+              }
+            >
+              {getProviderConfig(manualProvider || detectionResult!.provider).displayName}
+              {!manualProvider && detectionResult && ` (${(detectionResult.confidence * 100).toFixed(0)}%)`}
+            </div>
+          )}
+          <div className='flex ml-4 items-center text-md text-gray-600'>
             Cookie-free editor, no tracking, no ads, no bullshit.
           </div>
         </div>
@@ -612,11 +732,18 @@ export default function SimpleEditor() {
           </div>
         </div>
       </div>
-
-
-
-      {/* Mobile-first editor */}
-      <div className="w-full">
+      <div
+        className="flex-1 overflow-hidden transition-all duration-300"
+        style={
+          detectionResult
+            ? {
+                border: '2px solid transparent',
+                borderColor: getProviderConfig(detectionResult.provider).editorBorderColor,
+                boxShadow: getProviderConfig(detectionResult.provider).editorShadow,
+              }
+            : { border: '2px solid transparent' }
+        }
+      >
         <AceEditor
           mode={mode}
           theme={isDarkMode ? "monokai" : "github"}
@@ -627,20 +754,43 @@ export default function SimpleEditor() {
           setOptions={{
             useWorker: false,
             showPrintMargin: false,
-            fontSize: windowSize.width < 640 ? 16 : 14,
           }}
-          style={{ 
-            width: '100%', 
-            height: windowSize.height < 700 ? '50vh' : '60vh',
-            borderRadius: '0.5rem',
-            minHeight: '300px'
+          onLoad={(editor) => {
+            editorRef.current = editor
           }}
+          style={{ width: '100%', height: '100%' }}
         />
       </div>
-      
-      {/* Mobile-optimized stats */}
-      <div className="w-full">
+      <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
         <TextStats content={content} />
+        {validationResult && (validationResult.errors.length > 0 || validationResult.warnings.length > 0) && (
+          <div className="mt-2 space-y-1">
+            {validationResult.errors.map((error, index) => (
+              <div
+                key={`error-${index}`}
+                className="flex items-start gap-2 text-sm bg-red-50 dark:bg-red-950 border-l-4 border-red-500 px-3 py-2 rounded"
+              >
+                <span className="text-red-600 dark:text-red-400 font-semibold">Error:</span>
+                <div className="flex-1">
+                  <span className="font-mono text-xs text-red-700 dark:text-red-300">{error.field}</span>
+                  <span className="text-red-800 dark:text-red-200 ml-2">{error.message}</span>
+                </div>
+              </div>
+            ))}
+            {validationResult.warnings.map((warning, index) => (
+              <div
+                key={`warning-${index}`}
+                className="flex items-start gap-2 text-sm bg-amber-50 dark:bg-amber-950 border-l-4 border-amber-500 px-3 py-2 rounded"
+              >
+                <span className="text-amber-600 dark:text-amber-400 font-semibold">Warning:</span>
+                <div className="flex-1">
+                  <span className="font-mono text-xs text-amber-700 dark:text-amber-300">{warning.field}</span>
+                  <span className="text-amber-800 dark:text-amber-200 ml-2">{warning.message}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

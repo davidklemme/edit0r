@@ -1,0 +1,14 @@
+{
+  "model": "anthropic/claude-3.5-sonnet",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Write a haiku about coding"
+    }
+  ],
+  "provider": {
+    "order": ["Anthropic", "OpenAI"],
+    "allow_fallbacks": true
+  },
+  "max_tokens": 256
+}

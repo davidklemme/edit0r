@@ -5,6 +5,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import PlausibleProvider from "next-plausible";
 import { Toaster } from "@/components/ui/toaster";
+import WebVitals from "@/components/web-vitals";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -32,6 +33,7 @@ export default function RootLayout({
       <body
         className='font-sans antialiased'
       ><PlausibleProvider domain="edit0r.vercel.app">
+        <WebVitals />
         {children}
         <Toaster />
         <footer className="footer p-4

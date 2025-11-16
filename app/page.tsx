@@ -1,12 +1,15 @@
 import SimpleEditor from '@/components/simple-editor'
 
+// This page uses React Server Components (RSC)
+// SimpleEditor is marked with 'use client', so Next.js automatically:
+// 1. Code-splits it into a separate bundle
+// 2. Only loads it client-side
+// 3. Server-renders the shell (this component)
+
 export default function Home() {
   return (
-    <main className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-800 items-start">
-
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-2xl p-6 w-full mx-4 mb-8 h-full">
-        <SimpleEditor />
-      </div>
+    <main className="flex flex-col h-screen w-screen overflow-hidden bg-slate-50 dark:bg-slate-800">
+      <SimpleEditor />
     </main>
   )
 }
