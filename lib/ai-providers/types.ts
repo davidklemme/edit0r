@@ -3,6 +3,14 @@ export type AIProvider =
   | 'anthropic'
   | 'vertex-ai'
   | 'azure-openai'
+  | 'groq'
+  | 'together-ai'
+  | 'fireworks'
+  | 'anyscale'
+  | 'perplexity'
+  | 'openrouter'
+  | 'replicate'
+  | 'local-ai'
   | 'generic';
 
 export interface ProviderDetectionResult {
