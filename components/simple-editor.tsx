@@ -21,6 +21,8 @@ import TextStats from './stats'
 
 import { providerDetector, providerValidator, getProviderConfig, getSupportedProviders } from '@/lib/ai-providers'
 import type { ProviderDetectionResult, ValidationResult, AIProvider } from '@/lib/ai-providers'
+import { ProcessingHistoryManager, smartRemoveLineBreaks, enhancedFlattenContent, detectLineEndings, defaultLineBreakOptions } from '@/lib/utils'
+import type { LineBreakOptions, LineEndingType } from '@/lib/utils'
 
 export default function SimpleEditor() {
   const [content, setContent] = useState('')
@@ -31,7 +33,10 @@ export default function SimpleEditor() {
   const [detectionResult, setDetectionResult] = useState<ProviderDetectionResult | null>(null)
   const [manualProvider, setManualProvider] = useState<AIProvider | null>(null)
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
+  const [showLineBreakMenu, setShowLineBreakMenu] = useState(false)
+  const [lineBreakOptions, setLineBreakOptions] = useState<LineBreakOptions>(defaultLineBreakOptions)
   const editorRef = useRef<Ace.Editor | null>(null)
+  const historyManager = useRef(new ProcessingHistoryManager()).current
 
   useEffect(() => {
     // Apply custom styles to AceEditor and global scrollbars
