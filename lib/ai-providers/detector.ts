@@ -1,4 +1,7 @@
 import { ProviderDetectionResult } from './types';
+import { getLogger } from '../logger';
+
+const logger = getLogger('ProviderDetector');
 
 /**
  * Detects AI provider from config JSON structure
@@ -9,11 +12,26 @@ export class ProviderDetector {
    * Detect provider from config object
    */
   detect(content: string): ProviderDetectionResult {
+    logger.debug('Detecting provider from config', {
+      contentLength: content.length,
+    });
+
     try {
       const config = JSON.parse(content);
-      return this.detectFromObject(config);
-    } catch {
-      // Invalid JSON, return generic
+      const result = this.detectFromObject(config);
+
+      logger.info('Provider detected', {
+        provider: result.provider,
+        confidence: result.confidence,
+        indicators: result.indicators,
+      });
+
+      return result;
+    } catch (error) {
+      logger.warn('Invalid JSON - treating as generic', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
       return {
         provider: 'generic',
         confidence: 1.0,

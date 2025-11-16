@@ -37,7 +37,8 @@
     "react-dom": "^18",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "vercel": "^39.2.6"
+    "vercel": "^39.2.6",
+    "winston": "^3.18.3"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
