@@ -273,9 +273,8 @@ export default function SimpleEditor() {
     }
   }
   return (
-    <div className={`container mx-auto p-4 space-y-4 ${isDarkMode ? 'dark' : ''}`}>
-
-      <div className="flex justify-between items-center">
+    <div className={`flex flex-col h-full w-full ${isDarkMode ? 'dark' : ''}`}>
+      <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className='flex align-middle'>
           <Select onValueChange={(value) => setMode(value)}>
             <SelectTrigger className="w-[180px] px-4 py-2">
@@ -329,20 +328,24 @@ export default function SimpleEditor() {
           </Button>
         </div>
       </div>
-      <AceEditor
-        mode={mode}
-        theme={isDarkMode ? "monokai" : "github"}
-        onChange={setContent}
-        value={content}
-        name="editor"
-        editorProps={{ $blockScrolling: true }}
-        setOptions={{
-          useWorker: false,
-          showPrintMargin: false,
-        }}
-        style={{ width: '100%', height: '60vh', borderRadius: '0.5rem' }}
-      />
-      <TextStats content={content} />
+      <div className="flex-1 overflow-hidden">
+        <AceEditor
+          mode={mode}
+          theme={isDarkMode ? "monokai" : "github"}
+          onChange={setContent}
+          value={content}
+          name="editor"
+          editorProps={{ $blockScrolling: true }}
+          setOptions={{
+            useWorker: false,
+            showPrintMargin: false,
+          }}
+          style={{ width: '100%', height: '100%' }}
+        />
+      </div>
+      <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <TextStats content={content} />
+      </div>
     </div>
   )
 }
