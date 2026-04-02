@@ -36,14 +36,15 @@ export default function RootLayout({
         <WebVitals />
         {children}
         <Toaster />
-        <footer className="footer p-4
-    bg-transparent text-secondary text-xs
-    flex items-center justify-between">
-	    <div className="w-full flex flex-col md:flex-row text-gray-600 dark:text-gray-300 items-center justify-center">
-		2025 | <b><a href="https://www.berlinersoftwareschmiede.de">Berliner Softwareschmiede</a> UG</b> (haftungsb.), In der Gasse 6, 14550 Gross Kreutz, HRB 37643, UstID DE331327207
-	  </div>
-	
-</footer>
+        <footer className="p-4 bg-transparent text-xs flex items-center justify-center">
+          <div className="w-full flex flex-col md:flex-row text-muted-foreground items-center justify-center gap-1">
+            <span>2025</span>
+            <span className="hidden md:inline">|</span>
+            <span><b><a href="https://www.berlinersoftwareschmiede.de" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Berliner Softwareschmiede</a> UG</b> (haftungsb.)</span>
+            <span className="hidden md:inline">|</span>
+            <span className="text-center">In der Gasse 6, 14550 Gross Kreutz, HRB 37643, UstID DE331327207</span>
+          </div>
+        </footer>
 </PlausibleProvider>
       </body>
       
