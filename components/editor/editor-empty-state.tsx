@@ -17,6 +17,8 @@ export function EditorEmptyState() {
         <p className="text-sm text-muted-foreground/60 leading-relaxed">
           Paste, format, validate, and transform text, JSON, HTML, and CSV.
           <br />
+          Auto-detects AI provider configs with inline validation.
+          <br />
           No cookies, no tracking, no server-side processing.
         </p>
         <div className="flex gap-3 justify-center text-xs text-muted-foreground/40 pt-1">
