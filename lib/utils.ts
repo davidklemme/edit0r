@@ -67,16 +67,10 @@ export function normalizeLineEndings(content: string, targetType: LineEndingType
   }
 }
 
-// Check if a line is part of a code block
-function isInCodeBlock(lines: string[], index: number): boolean {
-  let inCodeBlock = false
-  for (let i = 0; i <= index; i++) {
-    const line = lines[i].trim()
-    if (line.startsWith('```') || line.startsWith('~~~')) {
-      inCodeBlock = !inCodeBlock
-    }
-  }
-  return inCodeBlock
+// Check if a line is a code block fence
+function isCodeBlockFence(line: string): boolean {
+  const trimmed = line.trim()
+  return trimmed.startsWith('```') || trimmed.startsWith('~~~')
 }
 
 // Check if a line is a list item
@@ -95,17 +89,27 @@ export function smartRemoveLineBreaks(content: string, options: LineBreakOptions
   // First normalize line endings
   const normalized = normalizeLineEndings(content, options.normalizeLineEndings)
   const lines = normalized.split(/\r?\n/)
-  
+
   const result: string[] = []
+  let inCodeBlock = false
   let i = 0
-  
+
   while (i < lines.length) {
     const currentLine = lines[i]
-    
+
+    // Track code block state incrementally (O(1) per line)
+    if (isCodeBlockFence(currentLine)) {
+      inCodeBlock = !inCodeBlock
+      if (options.preserveCodeBlocks) {
+        result.push(currentLine)
+        i++
+        continue
+      }
+    }
+
     // Handle empty lines
     if (isParagraphSeparator(currentLine)) {
       if (options.preserveParagraphs) {
-        // Add paragraph break
         if (result.length > 0 && result[result.length - 1] !== '') {
           result.push('')
         }
@@ -115,29 +119,29 @@ export function smartRemoveLineBreaks(content: string, options: LineBreakOptions
       i++
       continue
     }
-    
-    // Handle code blocks
-    if (options.preserveCodeBlocks && isInCodeBlock(lines, i)) {
+
+    // Handle code blocks — preserve lines inside them
+    if (options.preserveCodeBlocks && inCodeBlock) {
       result.push(currentLine)
       i++
       continue
     }
-    
+
     // Handle list items
     if (options.preserveLists && isListItem(currentLine)) {
       result.push(currentLine)
       i++
       continue
     }
-    
+
     // Regular line processing with intelligent spacing
     if (options.intelligentSpacing && i > 0 && result.length > 0) {
       const lastLine = result[result.length - 1]
-      const needsSpace = lastLine !== '' && 
-                        !lastLine.endsWith(' ') && 
+      const needsSpace = lastLine !== '' &&
+                        !lastLine.endsWith(' ') &&
                         !currentLine.startsWith(' ') &&
-                        !lastLine.match(/[.!?:]$/) // Don't add space after sentence endings
-      
+                        !lastLine.match(/[.!?:]$/)
+
       if (needsSpace) {
         result[result.length - 1] = lastLine + ' ' + currentLine.trim()
       } else {
@@ -146,12 +150,12 @@ export function smartRemoveLineBreaks(content: string, options: LineBreakOptions
     } else {
       result.push(currentLine)
     }
-    
+
     i++
   }
-  
+
   // Clean up final result
-  return result.join(options.normalizeLineEndings === 'CRLF' ? '\r\n' : 
+  return result.join(options.normalizeLineEndings === 'CRLF' ? '\r\n' :
                     options.normalizeLineEndings === 'CR' ? '\r' : '\n')
 }
 

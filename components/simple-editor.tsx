@@ -1,753 +1,228 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
-import AceEditor from 'react-ace'
-
+import { useState, useRef, useEffect, useMemo } from 'react'
 import type { Ace } from 'ace-builds'
-import { Button } from '@/components/ui/button'
-
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { toast } from '@/hooks/use-toast'
-import { Copy, Clipboard, FileCode2, Moon, Sun, Minimize2, Maximize2, Save, FolderOpen, Check, Settings, Undo, Redo, ChevronDown } from 'lucide-react'
+import { detectLineEndings } from '@/lib/utils'
 
-import 'ace-builds/src-noconflict/mode-json'
-import 'ace-builds/src-noconflict/mode-html'
-import 'ace-builds/src-noconflict/mode-text'
-import 'ace-builds/src-noconflict/theme-monokai'
-import 'ace-builds/src-noconflict/theme-github'
+import { EditorToolbar } from './editor/editor-toolbar'
+import { EditorArea } from './editor/editor-area'
+import { EditorStatusBar } from './editor/editor-status-bar'
+import { EditorEmptyState } from './editor/editor-empty-state'
 
-import Papa from 'papaparse'
-import TextStats from './stats'
+import { useEditorContent } from '@/hooks/use-editor-content'
+import { useDarkMode } from '@/hooks/use-dark-mode'
+import { useProviderDetection } from '@/hooks/use-provider-detection'
+import { useLocalStorage } from '@/hooks/use-local-storage'
+import { useLineBreakOptions } from '@/hooks/use-line-break-options'
 
-import { providerDetector, providerValidator, getProviderConfig, getSupportedProviders } from '@/lib/ai-providers'
-import type { ProviderDetectionResult, ValidationResult, AIProvider } from '@/lib/ai-providers'
-import { ProcessingHistoryManager, smartRemoveLineBreaks, enhancedFlattenContent, detectLineEndings, defaultLineBreakOptions } from '@/lib/utils'
-import type { LineBreakOptions, LineEndingType } from '@/lib/utils'
+import {
+  formatContent,
+  validateContent,
+  copyToClipboard,
+  pasteFromClipboard,
+  processLineBreaks,
+  flattenContent,
+  unflattenContent,
+} from '@/lib/editor-actions'
 
 export default function SimpleEditor() {
-  const [content, setContent] = useState('')
   const [mode, setMode] = useState('text')
-  const [isDarkMode, setIsDarkMode] = useState(true)
-  const [isFlattened, setIsFlattened] = useState(false)
-  const [savedKeys, setSavedKeys] = useState<string[]>([])
-  const [detectionResult, setDetectionResult] = useState<ProviderDetectionResult | null>(null)
-  const [manualProvider, setManualProvider] = useState<AIProvider | null>(null)
-  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
-  const [showLineBreakMenu, setShowLineBreakMenu] = useState(false)
-  const [lineBreakOptions, setLineBreakOptions] = useState<LineBreakOptions>(defaultLineBreakOptions)
   const editorRef = useRef<Ace.Editor | null>(null)
-  const historyManager = useRef(new ProcessingHistoryManager()).current
 
+  const { content, setContent, isFlattened, setIsFlattened, addToHistory, handleUndo, handleRedo, canUndo, canRedo, lastOperation } =
+    useEditorContent()
+  const { isDarkMode, toggleDarkMode } = useDarkMode()
+  const { detectionResult, manualProvider, setManualProvider, validationResult } = useProviderDetection(
+    content,
+    mode,
+    editorRef
+  )
+  const { savedKeys, saveContent, loadContent, refreshKeys } = useLocalStorage()
+  const { lineBreakOptions, setLineBreakOptions, resetOptions } = useLineBreakOptions()
+
+  const lineCount = useMemo(() => content.split('\n').length, [content])
+  const lineEndings = useMemo(() => detectLineEndings(content), [content])
+
+  // Warn before closing tab with content
   useEffect(() => {
-    loadSavedKeys()
-  }, [])
-
-  // Detect AI provider when content changes (debounced)
-  useEffect(() => {
-    if (mode !== 'json' || !content.trim()) {
-      setDetectionResult(null)
-      setValidationResult(null)
-      return
-    }
-
-    const timeoutId = setTimeout(() => {
-      try {
-        const result = providerDetector.detect(content)
-        // Only show detection if confidence is above threshold
-        if (result.confidence >= 0.3) {
-          setDetectionResult(result)
-        } else {
-          setDetectionResult(null)
-        }
-      } catch {
-        setDetectionResult(null)
+    const handler = (e: BeforeUnloadEvent) => {
+      if (content) {
+        e.preventDefault()
       }
-    }, 500) // 500ms debounce
-
-    return () => clearTimeout(timeoutId)
-  }, [content, mode])
-
-  // Validate content when provider or content changes
-  useEffect(() => {
-    if (mode !== 'json' || !content.trim()) {
-      setValidationResult(null)
-      return
     }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [content])
 
-    const timeoutId = setTimeout(() => {
-      try {
-        const config = JSON.parse(content)
-        const provider = manualProvider || detectionResult?.provider
-
-        if (provider && provider !== 'generic') {
-          const result = providerValidator.validate(config, provider)
-          setValidationResult(result)
-        } else {
-          setValidationResult(null)
-        }
-      } catch {
-        // Invalid JSON - will be caught by validation
-        setValidationResult(null)
-      }
-    }, 500) // 500ms debounce
-
-    return () => clearTimeout(timeoutId)
-  }, [content, mode, manualProvider, detectionResult])
-
-  // Update editor annotations when validation changes
-  useEffect(() => {
-    if (!editorRef.current) return
-
-    // Helper to find line number for a field in JSON content
-    const findLineForField = (fieldPath: string): number => {
-      const lines = content.split('\n')
-      const fieldName = fieldPath.split('.').pop()?.replace(/\[.*\]/, '') || fieldPath
-
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].includes(`"${fieldName}"`)) {
-          return i
-        }
-      }
-
-      const parentField = fieldPath.split('[')[0]
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].includes(`"${parentField}"`)) {
-          return i
-        }
-      }
-
-      return 0
-    }
-
-    const annotations: Ace.Annotation[] = []
-
-    if (validationResult) {
-      // Add error annotations
-      validationResult.errors.forEach((error) => {
-        annotations.push({
-          row: findLineForField(error.field),
-          column: 0,
-          text: `${error.field}: ${error.message}`,
-          type: 'error',
-        })
-      })
-
-      // Add warning annotations
-      validationResult.warnings.forEach((warning) => {
-        annotations.push({
-          row: findLineForField(warning.field),
-          column: 0,
-          text: `${warning.field}: ${warning.message}`,
-          type: 'warning',
-        })
-      })
-    }
-
-    editorRef.current.getSession().setAnnotations(annotations)
-  }, [validationResult, content])
-
-  const formatContent = () => {
-    try {
-      let formatted = content;
-      if (mode === 'json') {
-        formatted = JSON.stringify(JSON.parse(content), null, 2);
-      } else if (mode === 'html') {
-        formatted = formatHTML(content);
-      } else if (mode === 'csv') {
-        const parsed = Papa.parse(content, { header: true });
-        formatted = Papa.unparse(parsed.data, { quotes: true });
-      }
-      setContent(formatted);
-      toast({
-        title: 'Formatted successfully',
-        description: `Your ${mode.toUpperCase()} content has been formatted.`,
-      });
-    } catch (error: unknown) {
-      toast({
-        title: 'Formatting failed',
-        description: `Error: ${error instanceof Error ? error.message : 'An unknown error occurred'}`,
-        variant: 'destructive',
-      });
-    }
-  };
-  const formatHTML = (html: string) => {
-    const tab = '  ';
-    let result = '';
-    let indent = '';
-
-    html.split(/>\s*</).forEach(element => {
-      if (element.match(/^\/\w/)) {
-        indent = indent.substring(tab.length);
-      }
-
-      result += indent + '<' + element + '>\r\n';
-
-      if (element.match(/^<?\w[^>]*[^\/]$/) && !element.startsWith("input")) {
-        indent += tab;
-      }
-    });
-
-    return result.substring(1, result.length - 3);
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(content).then(() => {
-      toast({
-        title: 'Copied to clipboard',
-        description: 'The editor content has been copied to your clipboard.',
-      })
-    })
-  }
-
-  const pasteFromClipboard = () => {
-    navigator.clipboard.readText().then((text) => {
-      setContent(text)
-      toast({
-        title: 'Pasted from clipboard',
-        description: 'Content has been pasted from your clipboard.',
-      })
-    })
-  }
-
-  const validateContent = () => {
-    try {
-      if (mode === 'json') {
-        JSON.parse(content)
-      } else if (mode === 'html') {
-        const parser = new DOMParser()
-        const doc = parser.parseFromString(content, 'text/html')
-        if (doc.querySelector('parsererror')) {
-          throw new Error(doc.querySelector('parsererror')?.textContent || 'Invalid HTML')
-        }
-      } else if (mode === 'csv') {
-        const result = Papa.parse(content, { header: true })
-        if (result.errors.length) {
-          throw new Error(result.errors.map(e => e.message).join(', '))
-        }
-      }
-      toast({
-        title: 'Validation successful',
-        description: `The ${mode.toUpperCase()} content is valid.`,
-      })
-    } catch (error: unknown) {
-      toast({
-        title: 'Validation failed',
-        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: 'destructive',
-      })
-    }
-  }
-
-  const saveContent = () => {
-    const name = prompt('Enter a name for this content:')
-    if (!name) {
-      return
-    }
-    try {
-      localStorage.setItem(name, content)
-      loadSavedKeys()
-      toast({
-        title: 'Content saved',
-        description: `Saved as "${name}"`,
-      })
-    } catch (error: unknown) {
-      toast({
-        title: 'Save failed',
-        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: 'destructive',
-      })
-    }
-  }
-
-  const loadSavedKeys = () => {
-    const keys: string[] = []
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key) keys.push(key)
-    }
-    setSavedKeys(keys)
-  }
-
-  const loadContent = (key: string) => {
-    const value = localStorage.getItem(key)
-    if (value !== null) {
-      setContent(value)
-      toast({
-        title: 'Content loaded',
-        description: `Loaded "${key}"`,
-      })
-    }
-  }
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-  }
-
-  // Sync dark mode class on <html> so Tailwind dark: variants work globally
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark')
+  const handleCopy = async () => {
+    const result = await copyToClipboard(content)
+    if (result.ok) {
+      toast({ title: 'Copied to clipboard' })
     } else {
-      document.documentElement.classList.remove('dark')
-    }
-  }, [isDarkMode])
-
-  const addToHistory = (newContent: string, operation: string) => {
-    historyManager.addToHistory(content, operation)
-    setContent(newContent)
-  }
-
-  const handleUndo = () => {
-    const historyEntry = historyManager.undo()
-    if (historyEntry) {
-      setContent(historyEntry.content)
-      toast({
-        title: 'Undone',
-        description: `Reverted: ${historyEntry.operation}`,
-      })
+      toast({ title: 'Copy failed', description: result.error, variant: 'destructive' })
     }
   }
 
-  const handleRedo = () => {
-    const historyEntry = historyManager.redo()
-    if (historyEntry) {
-      setContent(historyEntry.content)
-      toast({
-        title: 'Redone',
-        description: `Reapplied: ${historyEntry.operation}`,
-      })
+  const handlePaste = async () => {
+    const result = await pasteFromClipboard()
+    if (result.ok) {
+      setContent(result.text)
+      toast({ title: 'Pasted from clipboard' })
+    } else {
+      toast({ title: 'Paste failed', description: result.error, variant: 'destructive' })
     }
   }
 
-  const smartLineBreakProcess = () => {
+  const handleFormat = () => {
     try {
-      const processed = smartRemoveLineBreaks(content, lineBreakOptions)
-      addToHistory(processed, 'Smart Line Break Processing')
-      setIsFlattened(false)
+      const formatted = formatContent(content, mode)
+      setContent(formatted)
+      toast({ title: 'Formatted successfully' })
+    } catch (error) {
       toast({
-        title: 'Line breaks processed',
-        description: 'Content has been processed with smart line break management.',
+        title: 'Format failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
       })
+    }
+  }
+
+  const handleValidate = () => {
+    const result = validateContent(content, mode)
+    if (result.valid) {
+      toast({ title: 'Valid', description: `${mode.toUpperCase()} content is valid.` })
+    } else {
+      toast({ title: 'Invalid', description: result.error, variant: 'destructive' })
+    }
+  }
+
+  const handleFlattenToggle = () => {
+    try {
+      if (isFlattened) {
+        const result = unflattenContent(content, mode)
+        setContent(result)
+        setIsFlattened(false)
+        toast({ title: 'Content unflattened' })
+      } else {
+        const result = flattenContent(content, lineBreakOptions)
+        addToHistory(result, 'Flatten')
+        setIsFlattened(true)
+        toast({ title: 'Content flattened' })
+      }
+    } catch (error) {
+      toast({
+        title: 'Operation failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleSmartProcess = () => {
+    try {
+      const processed = processLineBreaks(content, lineBreakOptions)
+      addToHistory(processed, 'Line Break Processing')
+      setIsFlattened(false)
+      toast({ title: 'Line breaks processed' })
     } catch (error) {
       toast({
         title: 'Processing failed',
-        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive',
       })
     }
   }
 
-  const flattenContent = () => {
-    try {
-      const flattened = enhancedFlattenContent(content, lineBreakOptions)
-      addToHistory(flattened, 'Enhanced Content Flattening')
-      setIsFlattened(true)
-      toast({
-        title: 'Content flattened',
-        description: 'The content has been intelligently flattened and escaped for use in URLs or API calls.',
-      })
-    } catch (error) {
-      toast({
-        title: 'Flattening failed',
-        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: 'destructive',
-      })
+  const handleSave = (name: string) => {
+    const result = saveContent(name, content)
+    if (result.ok) {
+      toast({ title: 'Saved', description: `Saved as "${name}"` })
+    } else if (result.error) {
+      toast({ title: 'Save failed', description: result.error, variant: 'destructive' })
     }
   }
 
-  const unflattenContent = () => {
-    try {
-      // Decode the URL-encoded content
-      let unflattened = decodeURIComponent(content);
+  const handleLoad = (key: string) => {
+    const value = loadContent(key)
+    if (value !== null) {
+      setContent(value)
+      toast({ title: 'Loaded', description: `Loaded "${key}"` })
+    }
+  }
 
-      // Format the content based on the current mode
-      if (mode === 'json') {
-        unflattened = JSON.stringify(JSON.parse(unflattened), null, 2);
-      } else if (mode === 'html') {
-        unflattened = formatHTML(unflattened);
-      } else if (mode === 'csv') {
-        const parsed = Papa.parse(unflattened, { header: true });
-        unflattened = Papa.unparse(parsed.data, { quotes: true });
+  const handleUndoWithToast = () => {
+    const op = handleUndo()
+    if (op) toast({ title: 'Undone', description: `Reverted: ${op}` })
+  }
+
+  const handleRedoWithToast = () => {
+    const op = handleRedo()
+    if (op) toast({ title: 'Redone', description: `Reapplied: ${op}` })
+  }
+
+  // Keyboard shortcuts — must be after handler declarations
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && e.key === 's') {
+        e.preventDefault()
+        handleSave('_quicksave')
+      } else if (mod && e.shiftKey && e.key === 'f') {
+        e.preventDefault()
+        handleFormat()
       }
-
-      setContent(unflattened);
-      setIsFlattened(false);
-      toast({
-        title: 'Content unflattened',
-        description: 'The content has been unflattened and formatted.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Unflattening failed',
-        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: 'destructive',
-      });
     }
-  }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  })
 
   return (
-    <div className="flex flex-col h-full w-full">
-      <div className="flex justify-between items-center px-4 py-3 border-b border-border flex-shrink-0">
-        <div className='flex items-center'>
-          <Select onValueChange={(value) => setMode(value)}>
-            <SelectTrigger className="w-full sm:w-[180px] h-12 sm:h-10 px-4 py-2 text-base sm:text-sm">
-              <SelectValue placeholder="Select mode" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="text">Plain Text</SelectItem>
-              <SelectItem value="json">JSON</SelectItem>
-              <SelectItem value="html">HTML</SelectItem>
-              <SelectItem value="csv">CSV</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            onValueChange={(value) => setManualProvider(value === 'auto' ? null : (value as AIProvider))}
-            value={manualProvider || 'auto'}
-          >
-            <SelectTrigger className="w-[200px] px-4 py-2 ml-4">
-              <SelectValue placeholder="Provider (auto)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Auto-detect</SelectItem>
-              {getSupportedProviders().filter(p => p !== 'generic').map((provider) => (
-                <SelectItem key={provider} value={provider}>
-                  {getProviderConfig(provider).displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {(manualProvider || detectionResult) && (
-            <div
-              className={`ml-4 px-3 py-1 rounded-full text-sm font-medium ${
-                getProviderConfig(manualProvider || detectionResult!.provider).badgeStyles
-              }`}
-              title={
-                detectionResult
-                  ? `Confidence: ${(detectionResult.confidence * 100).toFixed(0)}% - ${detectionResult.indicators.join(', ')}`
-                  : 'Manually selected'
-              }
-            >
-              {getProviderConfig(manualProvider || detectionResult!.provider).displayName}
-              {!manualProvider && detectionResult && ` (${(detectionResult.confidence * 100).toFixed(0)}%)`}
-            </div>
-          )}
-          <div className='flex ml-4 items-center text-md text-muted-foreground'>
-            Cookie-free editor, no tracking, no ads, no bullshit.
-          </div>
-        </div>
-                {/* Mobile-first toolbar */}
-        <div className="flex flex-col space-y-3 sm:space-y-0">
-          {/* Primary actions row */}
-          <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
-            {/* Essential actions group */}
-            <div className="flex gap-1">
-              <Button 
-                size="default" 
-                className="h-12 w-12 sm:h-10 sm:w-10" 
-                onClick={copyToClipboard} 
-                title="Copy to Clipboard"
-              >
-                <Copy className="h-5 w-5 sm:h-4 sm:w-4" />
-              </Button>
-              <Button 
-                size="default" 
-                className="h-12 w-12 sm:h-10 sm:w-10" 
-                onClick={pasteFromClipboard} 
-                title="Paste from Clipboard"
-              >
-                <Clipboard className="h-5 w-5 sm:h-4 sm:w-4" />
-              </Button>
-            </div>
-
-            {/* Format actions group */}
-            <div className="flex gap-1">
-              <Button 
-                size="default" 
-                className="h-12 w-12 sm:h-10 sm:w-10" 
-                onClick={formatContent} 
-                title="Format Content"
-              >
-                <FileCode2 className="h-5 w-5 sm:h-4 sm:w-4" />
-              </Button>
-              <Button 
-                size="default" 
-                className="h-12 w-12 sm:h-10 sm:w-10" 
-                onClick={validateContent} 
-                title="Validate Content"
-              >
-                <Check className="h-5 w-5 sm:h-4 sm:w-4" />
-              </Button>
-            </div>
-
-            {/* Line break menu */}
-            <div className="relative">
-              <Button 
-                size="default"
-                className="h-12 w-12 sm:h-10 sm:w-10 relative" 
-                onClick={() => setShowLineBreakMenu(!showLineBreakMenu)}
-                title="Line Break Options"
-              >
-                <Settings className="h-5 w-5 sm:h-4 sm:w-4" />
-                <ChevronDown className="h-3 w-3 sm:h-2 sm:w-2 absolute -bottom-0.5 -right-0.5" />
-              </Button>
-              
-              {showLineBreakMenu && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-40" 
-                    onClick={() => setShowLineBreakMenu(false)}
-                  />
-                  <div className="absolute top-full right-0 mt-2 w-[90vw] max-w-sm sm:w-80 bg-popover text-popover-foreground border border-border rounded-lg shadow-xl z-50">
-                    <div className="p-4 space-y-4">
-                      <div className="flex items-center justify-between border-b border-border pb-3">
-                        <h3 className="text-sm font-semibold text-foreground">Line Break Options</h3>
-                        <button
-                          onClick={() => setShowLineBreakMenu(false)}
-                          className="text-muted-foreground hover:text-foreground text-xl leading-none transition-colors"
-                          aria-label="Close line break options"
-                        >
-                          ×
-                        </button>
-                      </div>
-                      
-                      <div className="text-xs text-muted-foreground mb-3 font-medium">
-                        Detected: {detectLineEndings(content)} | Lines: {content.split('\n').length}
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 gap-3">
-                          <label className="flex items-center space-x-3 text-sm text-foreground cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={lineBreakOptions.preserveParagraphs}
-                              onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveParagraphs: e.target.checked }))}
-                              className="rounded h-4 w-4 accent-primary bg-muted border-input focus:ring-ring"
-                            />
-                            <span>Preserve paragraphs</span>
-                          </label>
-                          <label className="flex items-center space-x-3 text-sm text-foreground cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={lineBreakOptions.preserveCodeBlocks}
-                              onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveCodeBlocks: e.target.checked }))}
-                              className="rounded h-4 w-4 accent-primary bg-muted border-input focus:ring-ring"
-                            />
-                            <span>Preserve code blocks</span>
-                          </label>
-                          <label className="flex items-center space-x-3 text-sm text-foreground cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={lineBreakOptions.preserveLists}
-                              onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveLists: e.target.checked }))}
-                              className="rounded h-4 w-4 accent-primary bg-muted border-input focus:ring-ring"
-                            />
-                            <span>Preserve lists</span>
-                          </label>
-                          <label className="flex items-center space-x-3 text-sm text-foreground cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={lineBreakOptions.removeEmptyLines}
-                              onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, removeEmptyLines: e.target.checked }))}
-                              className="rounded h-4 w-4 accent-primary bg-muted border-input focus:ring-ring"
-                            />
-                            <span>Remove empty lines</span>
-                          </label>
-                          <label className="flex items-center space-x-3 text-sm text-foreground cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={lineBreakOptions.intelligentSpacing}
-                              onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, intelligentSpacing: e.target.checked }))}
-                              className="rounded h-4 w-4 accent-primary bg-muted border-input focus:ring-ring"
-                            />
-                            <span>Intelligent spacing</span>
-                          </label>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="block text-sm font-semibold text-foreground">Line endings:</label>
-                          <Select 
-                            value={lineBreakOptions.normalizeLineEndings} 
-                            onValueChange={(value: LineEndingType) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, normalizeLineEndings: value }))}
-                          >
-                            <SelectTrigger className="w-full h-10">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="LF">LF (Unix)</SelectItem>
-                              <SelectItem value="CRLF">CRLF (Windows)</SelectItem>
-                              <SelectItem value="CR">CR (Mac)</SelectItem>
-                              <SelectItem value="MIXED">Keep as is</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-border">
-                          <Button 
-                            size="sm" 
-                            className="flex-1 h-10"
-                            onClick={() => {
-                              smartLineBreakProcess()
-                              setShowLineBreakMenu(false)
-                            }}
-                          >
-                            Process Line Breaks
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="flex-1 h-10"
-                            onClick={() => setLineBreakOptions(defaultLineBreakOptions)}
-                          >
-                            Reset
-                          </Button>
-                        </div>
-                        
-                        {historyManager.canUndo() && (
-                          <div className="text-xs text-muted-foreground pt-1 font-medium">
-                            Last: {historyManager.getCurrentEntry()?.operation || 'None'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Transform actions group */}
-            <div className="flex gap-1">
-              <Button 
-                size="default" 
-                className="h-12 w-12 sm:h-10 sm:w-10" 
-                onClick={isFlattened ? unflattenContent : flattenContent} 
-                title={isFlattened ? "Unflatten Content" : "Enhanced Flatten Content"}
-              >
-                {isFlattened ? <Maximize2 className="h-5 w-5 sm:h-4 sm:w-4" /> : <Minimize2 className="h-5 w-5 sm:h-4 sm:w-4" />}
-              </Button>
-            </div>
-          </div>
-
-          {/* Secondary actions row */}
-          <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
-            {/* History group */}
-            <div className="flex gap-1">
-              <Button 
-                size="default"
-                className="h-12 w-12 sm:h-10 sm:w-10" 
-                onClick={handleUndo} 
-                disabled={!historyManager.canUndo()}
-                title="Undo"
-              >
-                <Undo className="h-5 w-5 sm:h-4 sm:w-4" />
-              </Button>
-              <Button 
-                size="default"
-                className="h-12 w-12 sm:h-10 sm:w-10" 
-                onClick={handleRedo} 
-                disabled={!historyManager.canRedo()}
-                title="Redo"
-              >
-                <Redo className="h-5 w-5 sm:h-4 sm:w-4" />
-              </Button>
-            </div>
-
-            {/* Storage group */}
-            <div className="flex gap-1">
-              <Button 
-                size="default" 
-                className="h-12 w-12 sm:h-10 sm:w-10" 
-                onClick={saveContent} 
-                title="Save Content"
-              >
-                <Save className="h-5 w-5 sm:h-4 sm:w-4" />
-              </Button>
-              <Select onValueChange={loadContent} onOpenChange={(open) => open && loadSavedKeys()}>
-                <SelectTrigger className="h-12 w-12 sm:h-10 sm:w-10 p-0">
-                  <FolderOpen className="h-5 w-5 sm:h-4 sm:w-4" />
-                </SelectTrigger>
-                <SelectContent>
-                  {savedKeys.length === 0 && (
-                    <SelectItem value="no-entries" disabled>No entries</SelectItem>
-                  )}
-                  {savedKeys.map((key) => (
-                    <SelectItem key={key} value={key}>{key}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Theme toggle */}
-            <Button 
-              size="default" 
-              className="h-12 w-12 sm:h-10 sm:w-10" 
-              onClick={toggleDarkMode} 
-              title="Toggle Dark Mode"
-            >
-              {isDarkMode ? <Sun className="h-5 w-5 sm:h-4 sm:w-4" /> : <Moon className="h-5 w-5 sm:h-4 sm:w-4" />}
-            </Button>
-          </div>
-        </div>
-      </div>
-      <div
-        className="flex-1 overflow-hidden transition-all duration-300"
-        style={
-          detectionResult
-            ? {
-                border: '2px solid transparent',
-                borderColor: getProviderConfig(detectionResult.provider).editorBorderColor,
-                boxShadow: getProviderConfig(detectionResult.provider).editorShadow,
-              }
-            : { border: '2px solid transparent' }
-        }
-      >
-        <AceEditor
+    <TooltipProvider delayDuration={300}>
+      <div className={`flex flex-col h-full w-full ${isDarkMode ? 'dark' : ''}`}>
+        <EditorToolbar
           mode={mode}
-          theme={isDarkMode ? "monokai" : "github"}
-          onChange={setContent}
-          value={content}
-          name="editor"
-          editorProps={{ $blockScrolling: true }}
-          setOptions={{
-            useWorker: false,
-            showPrintMargin: false,
-          }}
-          onLoad={(editor) => {
-            editorRef.current = editor
-          }}
-          style={{ width: '100%', height: '100%' }}
+          onModeChange={setMode}
+          manualProvider={manualProvider}
+          onManualProviderChange={setManualProvider}
+          detectionResult={detectionResult}
+          lineCount={lineCount}
+          lineEndings={lineEndings}
+          isFlattened={isFlattened}
+          onCopy={handleCopy}
+          onPaste={handlePaste}
+          onFormat={handleFormat}
+          onValidate={handleValidate}
+          onFlattenToggle={handleFlattenToggle}
+          onUndo={handleUndoWithToast}
+          onRedo={handleRedoWithToast}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onSave={handleSave}
+          savedKeys={savedKeys}
+          onLoad={handleLoad}
+          onRefreshKeys={refreshKeys}
+          lineBreakOptions={lineBreakOptions}
+          onLineBreakOptionsChange={setLineBreakOptions}
+          onResetOptions={resetOptions}
+          onSmartProcess={handleSmartProcess}
+          lastOperation={lastOperation}
+          isDarkMode={isDarkMode}
+          onToggleDarkMode={toggleDarkMode}
         />
+        <EditorArea
+          content={content}
+          onContentChange={setContent}
+          mode={mode}
+          isDarkMode={isDarkMode}
+          editorRef={editorRef}
+          detectionResult={detectionResult}
+        >
+          {!content && <EditorEmptyState />}
+        </EditorArea>
+        <EditorStatusBar content={content} validationResult={validationResult} />
       </div>
-      <div className="px-4 py-2 border-t border-border flex-shrink-0">
-        <TextStats content={content} />
-        {validationResult && (validationResult.errors.length > 0 || validationResult.warnings.length > 0) && (
-          <div className="mt-2 space-y-1">
-            {validationResult.errors.map((error, index) => (
-              <div
-                key={`error-${index}`}
-                className="flex items-start gap-2 text-sm bg-red-50 dark:bg-red-950 border-l-4 border-red-500 px-3 py-2 rounded"
-              >
-                <span className="text-red-600 dark:text-red-400 font-semibold">Error:</span>
-                <div className="flex-1">
-                  <span className="font-mono text-xs text-red-700 dark:text-red-300">{error.field}</span>
-                  <span className="text-red-800 dark:text-red-200 ml-2">{error.message}</span>
-                </div>
-              </div>
-            ))}
-            {validationResult.warnings.map((warning, index) => (
-              <div
-                key={`warning-${index}`}
-                className="flex items-start gap-2 text-sm bg-amber-50 dark:bg-amber-950 border-l-4 border-amber-500 px-3 py-2 rounded"
-              >
-                <span className="text-amber-600 dark:text-amber-400 font-semibold">Warning:</span>
-                <div className="flex-1">
-                  <span className="font-mono text-xs text-amber-700 dark:text-amber-300">{warning.field}</span>
-                  <span className="text-amber-800 dark:text-amber-200 ml-2">{warning.message}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    </TooltipProvider>
   )
 }

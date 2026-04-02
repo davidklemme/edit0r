@@ -255,23 +255,30 @@ export class ProviderDetector {
     const indicators: string[] = [];
     let score = 0;
 
-    // Model names (Groq-specific)
     if (config.model && typeof config.model === 'string') {
       const model = config.model.toLowerCase();
-      if (model.includes('llama') || model.includes('mixtral') || model.includes('gemma')) {
-        indicators.push(`Model: ${config.model}`);
-        score += 0.7;
-      }
+      // Only high confidence for Groq-specific identifiers
       if (model.includes('groq')) {
         indicators.push('Groq in model name');
         score += 0.8;
       }
+      // Open-source models are ambiguous — low score alone
+      if (model.includes('llama') || model.includes('mixtral') || model.includes('gemma')) {
+        indicators.push(`Model: ${config.model} (ambiguous)`);
+        score += 0.2;
+      }
     }
 
-    // Groq uses OpenAI-compatible format
+    // api_base pointing to Groq is definitive
+    const apiBase = config.api_base || config.base_url;
+    if (typeof apiBase === 'string' && apiBase.includes('groq')) {
+      indicators.push('Groq API endpoint');
+      score += 0.7;
+    }
+
     if (Array.isArray(config.functions) || config.function_call !== undefined) {
       indicators.push('OpenAI-compatible format');
-      score += 0.2;
+      score += 0.1;
     }
 
     return {
@@ -285,24 +292,30 @@ export class ProviderDetector {
     const indicators: string[] = [];
     let score = 0;
 
-    // Model names (Together AI patterns)
     if (config.model && typeof config.model === 'string') {
       const model = config.model.toLowerCase();
+      // Only high confidence for Together-specific identifiers
       if (model.includes('together') || model.includes('togethercomputer')) {
         indicators.push(`Model: ${config.model}`);
         score += 0.8;
       }
-      // Common open source models on Together
-      if (model.match(/llama.*-chat|mixtral|qwen|dbrx|yi-/)) {
-        indicators.push('Open source model');
-        score += 0.5;
+      // Open-source models are ambiguous — low score alone
+      if (model.match(/llama|mixtral|qwen|dbrx|yi-/)) {
+        indicators.push(`Open source model (ambiguous)`);
+        score += 0.15;
       }
     }
 
-    // Together uses OpenAI-compatible format
+    // api_base pointing to Together is definitive
+    const apiBase = config.api_base || config.base_url;
+    if (typeof apiBase === 'string' && apiBase.includes('together')) {
+      indicators.push('Together API endpoint');
+      score += 0.7;
+    }
+
     if (Array.isArray(config.functions)) {
       indicators.push('OpenAI-compatible format');
-      score += 0.2;
+      score += 0.1;
     }
 
     return {
@@ -346,24 +359,30 @@ export class ProviderDetector {
     const indicators: string[] = [];
     let score = 0;
 
-    // Model names (Anyscale patterns)
     if (config.model && typeof config.model === 'string') {
       const model = config.model.toLowerCase();
+      // Only high confidence for Anyscale-specific identifiers
       if (model.includes('anyscale') || model.includes('ray-')) {
         indicators.push(`Model: ${config.model}`);
         score += 0.8;
       }
-      // Anyscale often uses meta-llama prefix
+      // meta-llama is ambiguous — runs on many providers
       if (model.includes('meta-llama')) {
-        indicators.push('Meta Llama model');
-        score += 0.5;
+        indicators.push('Meta Llama model (ambiguous)');
+        score += 0.15;
       }
     }
 
-    // Anyscale uses OpenAI-compatible format
+    // api_base pointing to Anyscale is definitive
+    const apiBase = config.api_base || config.base_url;
+    if (typeof apiBase === 'string' && apiBase.includes('anyscale')) {
+      indicators.push('Anyscale API endpoint');
+      score += 0.7;
+    }
+
     if (Array.isArray(config.functions)) {
       indicators.push('OpenAI-compatible format');
-      score += 0.2;
+      score += 0.1;
     }
 
     return {
