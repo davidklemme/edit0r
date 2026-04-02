@@ -8,7 +8,7 @@ export default function TextStats({ content }: { content: string }) {
     const tokens = chars * 0.21787944117144232159552377016146
 
     return (
-        <div className="grid grid-cols-2 sm:flex sm:justify-start text-gray-700 dark:text-gray-300 gap-3 sm:gap-4 text-sm p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+        <div className="grid grid-cols-2 sm:flex sm:justify-start text-muted-foreground gap-3 sm:gap-4 text-sm p-3 bg-muted rounded-lg">
             <div className="flex flex-col sm:flex-row sm:items-center">
                 <span className="font-medium sm:mr-1">Characters:</span> 
                 <span>{chars.toFixed(0)}</span>

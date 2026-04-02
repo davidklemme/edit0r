@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import AceEditor from 'react-ace'
 
 import type { Ace } from 'ace-builds'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
@@ -37,60 +37,6 @@ export default function SimpleEditor() {
   const [lineBreakOptions, setLineBreakOptions] = useState<LineBreakOptions>(defaultLineBreakOptions)
   const editorRef = useRef<Ace.Editor | null>(null)
   const historyManager = useRef(new ProcessingHistoryManager()).current
-
-  useEffect(() => {
-    // Apply custom styles to AceEditor and global scrollbars
-    const style = document.createElement('style')
-    style.textContent = `
-      /* Global scrollbar styles */
-      ::-webkit-scrollbar {
-        width: 12px;
-        height: 12px;
-      }
-      
-      ::-webkit-scrollbar-track {
-        background: ${isDarkMode ? '#1a1a1a' : '#f1f1f1'};
-        border-radius: 10px;
-      }
-      
-      ::-webkit-scrollbar-thumb {
-        background: ${isDarkMode ? '#333' : '#888'};
-        border-radius: 10px;
-      }
-      
-      ::-webkit-scrollbar-thumb:hover {
-        background: ${isDarkMode ? '#444' : '#555'};
-      }
-      
-      /* Styles for Firefox */
-      * {
-        scrollbar-width: thin;
-        scrollbar-color: ${isDarkMode ? '#333 #1a1a1a' : '#888 #f1f1f1'};
-      }
-
-      /* AceEditor specific styles */
-      .ace_scrollbar::-webkit-scrollbar {
-        width: 12px;
-        height: 12px;
-      }
-      .ace_scrollbar::-webkit-scrollbar-track {
-        background: ${isDarkMode ? '#1a1a1a' : '#f1f1f1'};
-        border-radius: 10px;
-      }
-      .ace_scrollbar::-webkit-scrollbar-thumb {
-        background: ${isDarkMode ? '#333' : '#888'};
-        border-radius: 10px;
-      }
-      .ace_scrollbar::-webkit-scrollbar-thumb:hover {
-        background: ${isDarkMode ? '#444' : '#555'};
-      }
-    `
-    document.head.appendChild(style)
-
-    return () => {
-      document.head.removeChild(style)
-    }
-  }, [isDarkMode])
 
   useEffect(() => {
     loadSavedKeys()
@@ -337,6 +283,15 @@ export default function SimpleEditor() {
     setIsDarkMode(!isDarkMode);
   }
 
+  // Sync dark mode class on <html> so Tailwind dark: variants work globally
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [isDarkMode])
+
   const addToHistory = (newContent: string, operation: string) => {
     historyManager.addToHistory(content, operation)
     setContent(newContent)
@@ -431,9 +386,9 @@ export default function SimpleEditor() {
   }
 
   return (
-    <div className={`flex flex-col h-full w-full ${isDarkMode ? 'dark' : ''}`}>
-      <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <div className='flex align-middle'>
+    <div className="flex flex-col h-full w-full">
+      <div className="flex justify-between items-center px-4 py-3 border-b border-border flex-shrink-0">
+        <div className='flex items-center'>
           <Select onValueChange={(value) => setMode(value)}>
             <SelectTrigger className="w-full sm:w-[180px] h-12 sm:h-10 px-4 py-2 text-base sm:text-sm">
               <SelectValue placeholder="Select mode" />
@@ -476,7 +431,7 @@ export default function SimpleEditor() {
               {!manualProvider && detectionResult && ` (${(detectionResult.confidence * 100).toFixed(0)}%)`}
             </div>
           )}
-          <div className='flex ml-4 items-center text-md text-gray-600'>
+          <div className='flex ml-4 items-center text-md text-muted-foreground'>
             Cookie-free editor, no tracking, no ads, no bullshit.
           </div>
         </div>
@@ -542,73 +497,74 @@ export default function SimpleEditor() {
                     className="fixed inset-0 z-40" 
                     onClick={() => setShowLineBreakMenu(false)}
                   />
-                  <div className="absolute top-full right-0 mt-2 w-[90vw] max-w-sm sm:w-80 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl z-50">
+                  <div className="absolute top-full right-0 mt-2 w-[90vw] max-w-sm sm:w-80 bg-popover text-popover-foreground border border-border rounded-lg shadow-xl z-50">
                     <div className="p-4 space-y-4">
-                      <div className="flex items-center justify-between border-b border-gray-300 dark:border-gray-600 pb-3">
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Line Break Options</h3>
-                        <button 
+                      <div className="flex items-center justify-between border-b border-border pb-3">
+                        <h3 className="text-sm font-semibold text-foreground">Line Break Options</h3>
+                        <button
                           onClick={() => setShowLineBreakMenu(false)}
-                          className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl leading-none transition-colors"
+                          className="text-muted-foreground hover:text-foreground text-xl leading-none transition-colors"
+                          aria-label="Close line break options"
                         >
                           ×
                         </button>
                       </div>
                       
-                      <div className="text-xs text-gray-600 dark:text-gray-300 mb-3 font-medium">
+                      <div className="text-xs text-muted-foreground mb-3 font-medium">
                         Detected: {detectLineEndings(content)} | Lines: {content.split('\n').length}
                       </div>
 
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 gap-3">
-                          <label className="flex items-center space-x-3 text-sm text-gray-900 dark:text-gray-100 cursor-pointer">
+                          <label className="flex items-center space-x-3 text-sm text-foreground cursor-pointer">
                             <input
                               type="checkbox"
                               checked={lineBreakOptions.preserveParagraphs}
                               onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveParagraphs: e.target.checked }))}
-                              className="rounded h-4 w-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-400"
+                              className="rounded h-4 w-4 accent-primary bg-muted border-input focus:ring-ring"
                             />
                             <span>Preserve paragraphs</span>
                           </label>
-                          <label className="flex items-center space-x-3 text-sm text-gray-900 dark:text-gray-100 cursor-pointer">
+                          <label className="flex items-center space-x-3 text-sm text-foreground cursor-pointer">
                             <input
                               type="checkbox"
                               checked={lineBreakOptions.preserveCodeBlocks}
                               onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveCodeBlocks: e.target.checked }))}
-                              className="rounded h-4 w-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-400"
+                              className="rounded h-4 w-4 accent-primary bg-muted border-input focus:ring-ring"
                             />
                             <span>Preserve code blocks</span>
                           </label>
-                          <label className="flex items-center space-x-3 text-sm text-gray-900 dark:text-gray-100 cursor-pointer">
+                          <label className="flex items-center space-x-3 text-sm text-foreground cursor-pointer">
                             <input
                               type="checkbox"
                               checked={lineBreakOptions.preserveLists}
                               onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, preserveLists: e.target.checked }))}
-                              className="rounded h-4 w-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-400"
+                              className="rounded h-4 w-4 accent-primary bg-muted border-input focus:ring-ring"
                             />
                             <span>Preserve lists</span>
                           </label>
-                          <label className="flex items-center space-x-3 text-sm text-gray-900 dark:text-gray-100 cursor-pointer">
+                          <label className="flex items-center space-x-3 text-sm text-foreground cursor-pointer">
                             <input
                               type="checkbox"
                               checked={lineBreakOptions.removeEmptyLines}
                               onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, removeEmptyLines: e.target.checked }))}
-                              className="rounded h-4 w-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-400"
+                              className="rounded h-4 w-4 accent-primary bg-muted border-input focus:ring-ring"
                             />
                             <span>Remove empty lines</span>
                           </label>
-                          <label className="flex items-center space-x-3 text-sm text-gray-900 dark:text-gray-100 cursor-pointer">
+                          <label className="flex items-center space-x-3 text-sm text-foreground cursor-pointer">
                             <input
                               type="checkbox"
                               checked={lineBreakOptions.intelligentSpacing}
                               onChange={(e) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, intelligentSpacing: e.target.checked }))}
-                              className="rounded h-4 w-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-400"
+                              className="rounded h-4 w-4 accent-primary bg-muted border-input focus:ring-ring"
                             />
                             <span>Intelligent spacing</span>
                           </label>
                         </div>
 
                         <div className="space-y-2">
-                          <label className="block text-sm font-semibold text-gray-900 dark:text-gray-100">Line endings:</label>
+                          <label className="block text-sm font-semibold text-foreground">Line endings:</label>
                           <Select 
                             value={lineBreakOptions.normalizeLineEndings} 
                             onValueChange={(value: LineEndingType) => setLineBreakOptions((prev: LineBreakOptions) => ({ ...prev, normalizeLineEndings: value }))}
@@ -625,7 +581,7 @@ export default function SimpleEditor() {
                           </Select>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-gray-300 dark:border-gray-600">
+                        <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-border">
                           <Button 
                             size="sm" 
                             className="flex-1 h-10"
@@ -647,7 +603,7 @@ export default function SimpleEditor() {
                         </div>
                         
                         {historyManager.canUndo() && (
-                          <div className="text-xs text-gray-600 dark:text-gray-300 pt-1 font-medium">
+                          <div className="text-xs text-muted-foreground pt-1 font-medium">
                             Last: {historyManager.getCurrentEntry()?.operation || 'None'}
                           </div>
                         )}
@@ -761,7 +717,7 @@ export default function SimpleEditor() {
           style={{ width: '100%', height: '100%' }}
         />
       </div>
-      <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+      <div className="px-4 py-2 border-t border-border flex-shrink-0">
         <TextStats content={content} />
         {validationResult && (validationResult.errors.length > 0 || validationResult.warnings.length > 0) && (
           <div className="mt-2 space-y-1">
