@@ -25,6 +25,7 @@ import {
   processLineBreaks,
   flattenContent,
   unflattenContent,
+  cleanClaudeOutput,
 } from '@/lib/editor-actions'
 
 export default function SimpleEditor() {
@@ -135,6 +136,20 @@ export default function SimpleEditor() {
     }
   }
 
+  const handleCleanClaudeOutput = () => {
+    try {
+      const cleaned = cleanClaudeOutput(content)
+      addToHistory(cleaned, 'Clean Claude Output')
+      toast({ title: 'Claude output cleaned' })
+    } catch (error) {
+      toast({
+        title: 'Cleaning failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const handleSave = (name: string) => {
     const result = saveContent(name, content)
     if (result.ok) {
@@ -207,6 +222,7 @@ export default function SimpleEditor() {
           onLineBreakOptionsChange={setLineBreakOptions}
           onResetOptions={resetOptions}
           onSmartProcess={handleSmartProcess}
+          onCleanClaudeOutput={handleCleanClaudeOutput}
           lastOperation={lastOperation}
           isDarkMode={isDarkMode}
           onToggleDarkMode={toggleDarkMode}
