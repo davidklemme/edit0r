@@ -178,6 +178,56 @@ export function enhancedFlattenContent(content: string, options: Partial<LineBre
   return encodeURIComponent(processed)
 }
 
+// Clean Claude Code terminal output
+// Removes common leading whitespace and collapses multiple empty lines
+export function cleanClaudeOutput(content: string): string {
+  const lines = content.split(/\r?\n/)
+
+  // Count indent frequencies among indented lines to find the common Claude Code indent
+  const indentCounts: Record<number, number> = {}
+  for (const line of lines) {
+    if (line.trim() === '') continue
+    const match = line.match(/^[ \t]+/)
+    if (match) {
+      const len = match[0].length
+      indentCounts[len] = (indentCounts[len] || 0) + 1
+    }
+  }
+
+  // Find the minimum indent that appears on indented lines
+  const indents = Object.keys(indentCounts).map(Number).sort((a, b) => a - b)
+  const minIndent = indents.length > 0 ? indents[0] : 0
+
+  const cleaned: string[] = []
+  let lastWasEmpty = false
+
+  for (const line of lines) {
+    // Strip common indentation (only if line has enough leading whitespace)
+    const match = line.match(/^[ \t]*/)
+    const leadingWs = match ? match[0].length : 0
+    const dedented = leadingWs >= minIndent ? line.slice(minIndent) : line
+    const stripped = dedented.trimEnd()
+    const isEmpty = stripped === ''
+
+    if (isEmpty) {
+      // Collapse consecutive empty lines to single empty line
+      if (!lastWasEmpty) {
+        cleaned.push('')
+        lastWasEmpty = true
+      }
+    } else {
+      cleaned.push(stripped)
+      lastWasEmpty = false
+    }
+  }
+
+  // Trim leading/trailing empty lines
+  while (cleaned.length > 0 && cleaned[0] === '') cleaned.shift()
+  while (cleaned.length > 0 && cleaned[cleaned.length - 1] === '') cleaned.pop()
+
+  return cleaned.join('\n')
+}
+
 // History management for undo/redo
 export class ProcessingHistoryManager {
   private history: ProcessingHistory[] = []

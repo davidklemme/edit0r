@@ -1,5 +1,5 @@
 import Papa from 'papaparse'
-import { smartRemoveLineBreaks, enhancedFlattenContent } from '@/lib/utils'
+import { smartRemoveLineBreaks, enhancedFlattenContent, cleanClaudeOutput as cleanClaudeOutputUtil } from '@/lib/utils'
 import type { LineBreakOptions } from '@/lib/utils'
 
 const VOID_ELEMENTS = new Set([
@@ -156,4 +156,8 @@ export function unflattenContent(content: string, mode: string): string {
   }
 
   return unflattened
+}
+
+export function cleanClaudeOutput(content: string): string {
+  return cleanClaudeOutputUtil(content)
 }

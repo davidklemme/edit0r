@@ -14,6 +14,7 @@ import {
   Redo,
   Moon,
   Sun,
+  Terminal,
 } from 'lucide-react'
 
 import { ModeSelect } from './mode-select'
@@ -52,6 +53,7 @@ interface EditorToolbarProps {
   onLineBreakOptionsChange: React.Dispatch<React.SetStateAction<LineBreakOptions>>
   onResetOptions: () => void
   onSmartProcess: () => void
+  onCleanClaudeOutput: () => void
   lastOperation: string | null
   isDarkMode: boolean
   onToggleDarkMode: () => void
@@ -110,6 +112,7 @@ export function EditorToolbar({
   onLineBreakOptionsChange,
   onResetOptions,
   onSmartProcess,
+  onCleanClaudeOutput,
   lastOperation,
   isDarkMode,
   onToggleDarkMode,
@@ -141,6 +144,7 @@ export function EditorToolbar({
         label={isFlattened ? 'Unflatten' : 'Flatten'}
         onClick={onFlattenToggle}
       />
+      <ToolbarButton icon={Terminal} label="Clean Claude Output" onClick={onCleanClaudeOutput} />
       <LineBreakPopover
         lineCount={lineCount}
         lineEndings={lineEndings}
