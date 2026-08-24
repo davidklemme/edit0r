@@ -40,7 +40,7 @@ export default function SimpleEditor() {
     mode,
     editorRef
   )
-  const { savedKeys, saveContent, loadContent, refreshKeys } = useLocalStorage()
+  const { savedNotes, saveContent, loadContent, refreshKeys } = useLocalStorage()
   const { lineBreakOptions, setLineBreakOptions, resetOptions } = useLineBreakOptions()
 
   const lineCount = useMemo(() => content.split('\n').length, [content])
@@ -159,11 +159,12 @@ export default function SimpleEditor() {
     }
   }
 
-  const handleLoad = (key: string) => {
-    const value = loadContent(key)
+  const handleLoad = (id: string) => {
+    const value = loadContent(id)
     if (value !== null) {
       setContent(value)
-      toast({ title: 'Loaded', description: `Loaded "${key}"` })
+      const note = savedNotes.find((savedNote) => savedNote.id === id)
+      toast({ title: 'Loaded', description: note ? `Loaded "${note.name}"` : 'Loaded saved note' })
     }
   }
 
@@ -215,7 +216,7 @@ export default function SimpleEditor() {
           canUndo={canUndo}
           canRedo={canRedo}
           onSave={handleSave}
-          savedKeys={savedKeys}
+          savedNotes={savedNotes}
           onLoad={handleLoad}
           onRefreshKeys={refreshKeys}
           lineBreakOptions={lineBreakOptions}

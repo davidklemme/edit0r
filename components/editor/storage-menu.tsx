@@ -5,14 +5,15 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { FolderOpen } from 'lucide-react'
+import type { SavedNote } from '@/lib/note-storage'
 
 interface StorageMenuProps {
-  savedKeys: string[]
-  onLoad: (key: string) => void
+  savedNotes: SavedNote[]
+  onLoad: (id: string) => void
   onRefresh: () => void
 }
 
-export function StorageMenu({ savedKeys, onLoad, onRefresh }: StorageMenuProps) {
+export function StorageMenu({ savedNotes, onLoad, onRefresh }: StorageMenuProps) {
   const [open, setOpen] = useState(false)
 
   const trigger = (
@@ -41,20 +42,23 @@ export function StorageMenu({ savedKeys, onLoad, onRefresh }: StorageMenuProps) 
       )}
 
       <PopoverContent align="end" className="w-56 p-2">
-        {savedKeys.length === 0 ? (
+        {savedNotes.length === 0 ? (
           <p className="text-xs text-muted-foreground p-2 text-center">No saved entries</p>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {savedKeys.map((key) => (
+            {savedNotes.map((note) => (
               <button
-                key={key}
-                className="text-left text-sm px-2 py-1.5 rounded hover:bg-accent transition-colors truncate"
+                key={note.id}
+                className="text-left px-2 py-1.5 rounded hover:bg-accent transition-colors"
                 onClick={() => {
-                  onLoad(key)
+                  onLoad(note.id)
                   setOpen(false)
                 }}
               >
-                {key}
+                <span className="block truncate text-sm">{note.name}</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  {note.savedAt ? new Date(note.savedAt).toLocaleString() : 'Legacy save'}
+                </span>
               </button>
             ))}
           </div>

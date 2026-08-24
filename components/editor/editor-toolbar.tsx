@@ -26,6 +26,7 @@ import { SavePopover } from './save-popover'
 
 import type { ProviderDetectionResult, AIProvider } from '@/lib/ai-providers'
 import type { LineBreakOptions } from '@/lib/utils'
+import type { SavedNote } from '@/lib/note-storage'
 
 interface EditorToolbarProps {
   mode: string
@@ -46,7 +47,7 @@ interface EditorToolbarProps {
   canUndo: boolean
   canRedo: boolean
   onSave: (name: string) => void
-  savedKeys: string[]
+  savedNotes: SavedNote[]
   onLoad: (key: string) => void
   onRefreshKeys: () => void
   lineBreakOptions: LineBreakOptions
@@ -105,7 +106,7 @@ export function EditorToolbar({
   canUndo,
   canRedo,
   onSave,
-  savedKeys,
+  savedNotes,
   onLoad,
   onRefreshKeys,
   lineBreakOptions,
@@ -166,7 +167,7 @@ export function EditorToolbar({
 
       {/* Storage */}
       <SavePopover onSave={onSave} />
-      <StorageMenu savedKeys={savedKeys} onLoad={onLoad} onRefresh={onRefreshKeys} />
+      <StorageMenu savedNotes={savedNotes} onLoad={onLoad} onRefresh={onRefreshKeys} />
 
       <ToolbarSeparator />
 
