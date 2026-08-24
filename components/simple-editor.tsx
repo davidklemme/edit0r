@@ -16,6 +16,9 @@ import { useDarkMode } from '@/hooks/use-dark-mode'
 import { useProviderDetection } from '@/hooks/use-provider-detection'
 import { useLocalStorage } from '@/hooks/use-local-storage'
 import { useLineBreakOptions } from '@/hooks/use-line-break-options'
+import { useNoteFile } from '@/hooks/use-note-file'
+
+import type { CaptureMeta } from '@/lib/note-capture'
 
 import {
   formatContent,
@@ -42,6 +45,7 @@ export default function SimpleEditor() {
   )
   const { savedNotes, saveContent, loadContent, refreshKeys } = useLocalStorage()
   const { lineBreakOptions, setLineBreakOptions, resetOptions } = useLineBreakOptions()
+  const noteFile = useNoteFile()
 
   const lineCount = useMemo(() => content.split('\n').length, [content])
   const lineEndings = useMemo(() => detectLineEndings(content), [content])
@@ -168,6 +172,29 @@ export default function SimpleEditor() {
     }
   }
 
+  const handleConnectNoteFile = async () => {
+    const result = await noteFile.connect()
+    if (result.ok) {
+      toast({ title: 'Notes file connected' })
+    } else if (result.error) {
+      toast({ title: 'Could not connect', description: result.error, variant: 'destructive' })
+    }
+  }
+
+  const handleChangeNoteFile = async () => {
+    await noteFile.disconnect()
+    await handleConnectNoteFile()
+  }
+
+  const handleAppendToNoteFile = async (meta: CaptureMeta) => {
+    const result = await noteFile.append(content, meta)
+    if (result.ok) {
+      toast({ title: 'Appended to notes file', description: `Block ${result.id}` })
+    } else if (result.error) {
+      toast({ title: 'Append failed', description: result.error, variant: 'destructive' })
+    }
+  }
+
   const handleUndoWithToast = () => {
     const op = handleUndo()
     if (op) toast({ title: 'Undone', description: `Reverted: ${op}` })
@@ -182,10 +209,16 @@ export default function SimpleEditor() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey
-      if (mod && e.key === 's') {
+      if (!mod) return
+      // Shift uppercases e.key, so compare case-insensitively.
+      const key = e.key.toLowerCase()
+      if (key === 's' && !e.shiftKey) {
         e.preventDefault()
         handleSave('_quicksave')
-      } else if (mod && e.shiftKey && e.key === 'f') {
+      } else if (key === 's' && e.shiftKey) {
+        e.preventDefault()
+        if (noteFile.status === 'ready') handleAppendToNoteFile(noteFile.meta)
+      } else if (key === 'f' && e.shiftKey) {
         e.preventDefault()
         handleFormat()
       }
@@ -219,6 +252,16 @@ export default function SimpleEditor() {
           savedNotes={savedNotes}
           onLoad={handleLoad}
           onRefreshKeys={refreshKeys}
+          noteFile={{
+            status: noteFile.status,
+            fileName: noteFile.fileName,
+            meta: noteFile.meta,
+            isAppending: noteFile.isAppending,
+            hasContent: Boolean(content.trim()),
+            onConnect: handleConnectNoteFile,
+            onChangeFile: handleChangeNoteFile,
+            onAppend: handleAppendToNoteFile,
+          }}
           lineBreakOptions={lineBreakOptions}
           onLineBreakOptionsChange={setLineBreakOptions}
           onResetOptions={resetOptions}

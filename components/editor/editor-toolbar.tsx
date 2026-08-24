@@ -23,6 +23,7 @@ import { ProviderBadge } from './provider-badge'
 import { LineBreakPopover } from './line-break-popover'
 import { StorageMenu } from './storage-menu'
 import { SavePopover } from './save-popover'
+import { NoteFilePopover, type NoteFilePopoverProps } from './note-file-popover'
 
 import type { ProviderDetectionResult, AIProvider } from '@/lib/ai-providers'
 import type { LineBreakOptions } from '@/lib/utils'
@@ -49,6 +50,7 @@ interface EditorToolbarProps {
   onSave: (name: string) => void
   savedNotes: SavedNote[]
   onLoad: (key: string) => void
+  noteFile: NoteFilePopoverProps
   onRefreshKeys: () => void
   lineBreakOptions: LineBreakOptions
   onLineBreakOptionsChange: React.Dispatch<React.SetStateAction<LineBreakOptions>>
@@ -109,6 +111,7 @@ export function EditorToolbar({
   savedNotes,
   onLoad,
   onRefreshKeys,
+  noteFile,
   lineBreakOptions,
   onLineBreakOptionsChange,
   onResetOptions,
@@ -168,6 +171,7 @@ export function EditorToolbar({
       {/* Storage */}
       <SavePopover onSave={onSave} />
       <StorageMenu savedNotes={savedNotes} onLoad={onLoad} onRefresh={onRefreshKeys} />
+      <NoteFilePopover {...noteFile} />
 
       <ToolbarSeparator />
 
