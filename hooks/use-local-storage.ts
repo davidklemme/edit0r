@@ -1,26 +1,19 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { STORAGE_PREFIX } from '@/lib/constants'
+import { listNoteSnapshots, saveNoteSnapshot, type SavedNote } from '@/lib/note-storage'
 
 export function useLocalStorage() {
-  const [savedKeys, setSavedKeys] = useState<string[]>([])
+  const [savedNotes, setSavedNotes] = useState<SavedNote[]>([])
 
   const refreshKeys = useCallback(() => {
-    const keys: string[] = []
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key && key.startsWith(STORAGE_PREFIX)) {
-        keys.push(key.slice(STORAGE_PREFIX.length))
-      }
-    }
-    setSavedKeys(keys)
+    setSavedNotes(listNoteSnapshots(localStorage))
   }, [])
 
   const saveContent = useCallback(
     (name: string, content: string): { ok: boolean; error?: string } => {
       try {
-        localStorage.setItem(STORAGE_PREFIX + name, content)
+        saveNoteSnapshot(localStorage, name, content)
         refreshKeys()
         return { ok: true }
       } catch (error) {
@@ -30,9 +23,10 @@ export function useLocalStorage() {
     [refreshKeys]
   )
 
-  const loadContent = useCallback((key: string): string | null => {
-    return localStorage.getItem(STORAGE_PREFIX + key)
-  }, [])
+  const loadContent = useCallback(
+    (id: string): string | null => listNoteSnapshots(localStorage).find((note) => note.id === id)?.content ?? null,
+    []
+  )
 
-  return { savedKeys, saveContent, loadContent, refreshKeys }
+  return { savedNotes, saveContent, loadContent, refreshKeys }
 }

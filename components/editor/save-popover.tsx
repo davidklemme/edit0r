@@ -49,7 +49,8 @@ export function SavePopover({ onSave }: SavePopoverProps) {
           }}
           className="flex flex-col gap-2"
         >
-          <label className="text-sm font-medium">Save as</label>
+          <label className="text-sm font-medium">Save a snapshot</label>
+          <p className="text-xs text-muted-foreground">Every save is kept, even when you reuse a name.</p>
           <input
             type="text"
             value={name}
